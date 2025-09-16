@@ -7,10 +7,11 @@
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 9000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "serve:prod": "NODE_ENV=production next build && NODE_ENV=production next start -p 9000"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",

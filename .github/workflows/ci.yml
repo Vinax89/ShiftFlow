@@ -12,6 +12,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22.x
@@ -23,12 +25,10 @@ jobs:
           npm run -s lint || true
       - name: Feature readiness (DoD gate)
         run: node scripts/feature-ready.mjs
-      - name: Build (prod)
-        run: npm run build
       - name: Start server and run Lighthouse (mobile budgets)
         run: |
           npx --yes start-server-and-test \
-            "npm run start -p 9000" http-get://localhost:9000/api/healthz \
+            "npm run serve:prod" http-get://localhost:9000/api/healthz \
             "npx lighthouse http://localhost:9000 --preset=perf --form-factor=mobile --screenEmulation.mobile --budget-path=./lighthouse-budgets.json --quiet --output=json --output-path=./lh.json"
       - name: Upload LH report
         uses: actions/upload-artifact@v4

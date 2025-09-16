@@ -4,8 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 
 function sh(cmd){ return execSync(cmd, { stdio: 'pipe' }).toString().trim() }
 const base = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : 'origin/main'
-const files = sh(`git fetch ${base} --depth=50 || true; git diff --name-only ${base}...HEAD`).split('
-').filter(Boolean)
+const files = sh(`git fetch ${base} --depth=50 || true; git diff --name-only ${base}...HEAD`).split('\n').filter(Boolean)
 
 let failures = []
 

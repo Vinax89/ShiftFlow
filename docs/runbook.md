@@ -9,8 +9,7 @@ This project uses a GitHub Actions workflow (`.github/workflows/ci.yml`) to ensu
 To reproduce the CI performance checks locally, use the `serve:prod` script. This runs a production build and serves it on port 9000.
 
 ```bash
-npm run build
-npm run start -- -p 9000
+npm run serve:prod
 ```
 
 Once the server is running, you can run Lighthouse against it with the same budgets used in CI:

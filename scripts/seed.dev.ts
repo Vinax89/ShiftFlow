@@ -1,5 +1,8 @@
 // scripts/seed.dev.ts
+import { getApp } from 'firebase-admin/app'
 import { adminDb } from '../src/lib/admin'
+
+console.log('Admin projectId =', getApp().options.projectId)
 
 async function main(){
   const uid = process.env.SEED_UID || 'dev-user'

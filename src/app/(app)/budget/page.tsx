@@ -1,21 +1,55 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Suspense } from 'react'
 
-export default function BudgetPage() {
+function BudgetInner() {
+  // dev defaults; replace with user context later
+  const tenantId = 'dev'
+  const planId = 'baseline'
+  const headers: HeadersInit = {}
+  if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1') headers['x-dev-auth-uid'] = 'dev-user'
+
+  // Trigger recompute for today (idempotent) then read
+  async function load() {
+    await fetch(`/api/budget/recompute`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ tenantId, planId, dates: [new Date().toISOString().slice(0,10)] }) })
+    const r = await fetch(`/api/budget/read?tenantId=${tenantId}&planId=${planId}`, { headers })
+    if (!r.ok) throw new Error(await r.text())
+    return r.json()
+  }
+
+  // simple RSC pattern
+  // @ts-expect-error Async Server Component
+  const View = async () => {
+    const data = await load()
+    return (
+      <div className="p-6">
+        <h1 className="text-xl font-semibold mb-4">Budget — {data.periodKey}</h1>
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr><th className="text-left p-2">Envelope</th><th className="p-2">Planned</th><th className="p-2">Carry In</th><th className="p-2">Actual</th><th className="p-2">Remaining</th></tr>
+          </thead>
+          <tbody>
+            {data.envelopes?.map((e: any) => (
+              <tr key={e.envId} className="border-t">
+                <td className="p-2">{e.envId}</td>
+                <td className="p-2">${(e.plannedCents/100).toFixed(2)}</td>
+                <td className="p-2">${(e.carryInCents/100).toFixed(2)}</td>
+                <td className="p-2">${(e.actualCents/100).toFixed(2)}</td>
+                <td className="p-2">${(e.remainingCents/100).toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+  return <View />
+}
+
+export default function Page(){
   return (
-    <div className="space-y-6">
-      <h1 className="font-headline text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-        Budget
-      </h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Coming Soon</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
-            This section is under construction. Get ready to create budgets aligned with your paychecks and take control of your spending.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
+    <Suspense fallback={null}>
+      {/* uses server fetches, safe in RSC */}
+      {/* @ts-expect-error Async Server Component */}
+      <BudgetInner />
+    </Suspense>
+  )
 }

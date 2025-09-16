@@ -1,27 +1,27 @@
-// scripts/seed.dev.ts
-import { getApp } from 'firebase-admin/app'
 import { adminDb } from '../src/lib/admin'
-
-console.log('Admin projectId =', getApp().options.projectId)
 
 async function main(){
   const uid = process.env.SEED_UID || 'dev-user'
   const tId = process.env.SEED_TENANT || 'dev'
-  await adminDb.doc(`tenants/${tId}`).set(
-    { name: 'Dev Tenant', createdAt: Date.now(), ownerUid: uid, currency: 'USD', tz: 'America/Los_Angeles' },
-    { merge: true }
-  )
-  await adminDb.doc(`users/${uid}`).set(
-    { displayName: 'Dev', email: 'dev@example.com', tz: 'America/Los_Angeles', tenants: { [tId]: 'owner' } },
-    { merge: true }
-  )
-  const acctRef = await adminDb.collection(`tenants/${tId}/accounts`).add({
-    type: 'checking', name: 'Main Checking', mask: '1234', createdAt: Date.now(), updatedAt: Date.now()
-  })
-  await adminDb.collection(`tenants/${tId}/categories`).add({ name: 'Rent', group: 'needs', sort: 1 })
-  await adminDb.collection(`tenants/${tId}/transactions`).add({
-    accountId: acctRef.id, amountCents: -150000, currency: 'USD', date: Date.now(),
-    merchant: 'Landlord', status: 'posted', source: 'manual', hash: 'seed1'
-  })
+  await adminDb.doc(`tenants/${tId}`).set({ name: 'Dev Tenant', createdAt: Date.now(), ownerUid: uid, currency: 'USD', tz: 'America/Los_Angeles' }, { merge: true })
+  await adminDb.doc(`users/${uid}`).set({ displayName: 'Dev', email: 'dev@example.com', tz: 'America/Los_Angeles', tenants: { [tId]: 'owner' } }, { merge: true })
+
+  const planId = 'baseline'
+  await adminDb.doc(`tenants/${tId}/budget_plans/${planId}`).set({
+    name: 'Baseline', active: true, currency: 'USD', tz: 'America/Los_Angeles',
+    periodConfig: { type: 'biweekly', biweekly: { anchorDate: new Date().toISOString().slice(0,10) } },
+    rolloverPolicy: { positive: 'carry', negative: 'cap_zero' },
+    createdAt: Date.now(), updatedAt: Date.now()
+  }, { merge: true })
+
+  const envs = [
+    { id: 'Rent', group: 'needs', type: 'fixed', plannedCents: 150000 },
+    { id: 'Groceries', group: 'needs', type: 'flex', plannedCents: 40000 },
+    { id: 'Fun', group: 'wants', type: 'flex', plannedCents: 20000 },
+  ]
+  for (const e of envs) {
+    await adminDb.doc(`tenants/${tId}/budget_plans/${planId}/envelopes/${e.id}`).set(e)
+  }
 }
-main().catch(e => { console.error(e); process.exit(1) })
+
+main().catch(e=>{ console.error(e); process.exit(1) })

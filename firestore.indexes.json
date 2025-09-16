@@ -17,6 +17,26 @@
       "collectionGroup": "accounts",
       "queryScope": "COLLECTION",
       "fields": [ { "fieldPath": "createdAt", "order": "DESCENDING" } ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "periods",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "startDate",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ]
 }

@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "serve:prod": "NODE_ENV=production next build && NODE_ENV=production next start -p 9000",
-    "seed:dev": "ts-node --transpile-only scripts/seed.dev.ts"
+    "seed:dev": "tsx scripts/seed.dev.ts"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",

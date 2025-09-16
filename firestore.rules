@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function isSignedIn() { return request.auth != null }
+    function isUser(uid) { return isSignedIn() && request.auth.uid == uid }
+    function isMember(t) {
+      return isSignedIn() &&
+        exists(/databases/$(db)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(db)/documents/users/$(request.auth.uid)).data.tenants[t] != null;
+    }
+    function role(t) {
+      return get(/databases/$(db)/documents/users/$(request.auth.uid)).data.tenants[t];
+    }
+
+    match /users/{uid} {
+      allow read, update: if isUser(uid);
+      allow create: if isSignedIn();
+    }
+
+    match /tenants/{t} {
+      allow read: if isMember(t);
+      allow create: if isSignedIn();
+      allow update, delete: if isMember(t) && role(t) in ['owner','admin'];
+
+      match /{coll=accounts|categories|transactions|budget_plans|notifications}/{doc} {
+        allow read: if isMember(t);
+        allow create, update: if isMember(t);
+        allow delete: if isMember(t) && role(t) in ['owner','admin'];
+      }
+
+      match /audit_events/{doc} {
+        allow read: if isMember(t);
+        allow create: if false; // write via Cloud Function only
+        allow update, delete: if false;
+      }
+    }
+  }
+}

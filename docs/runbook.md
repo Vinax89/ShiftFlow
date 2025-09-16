@@ -21,6 +21,21 @@ npx lighthouse http://localhost:9000 --preset=perf --form-factor=mobile --screen
 
 The performance budgets are defined in `lighthouse-budgets.json`.
 
+### Seeding Development Data
+
+To seed your local Firestore emulator with development data, first set the required environment variables in a `.env.local` file at the root of the project:
+
+```
+SEED_EMAIL=your-dev-email@example.com
+SEED_PASS=your-dev-password
+```
+
+Then, run the seed script:
+
+```bash
+npm run seed:dev
+```
+
 ### Known ESLint Warnings
 
 The following ESLint warnings are known and can be safely ignored for now:

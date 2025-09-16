@@ -2,6 +2,7 @@ import { auth, db } from '@/lib/firebase'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { addDoc, setDoc, doc } from 'firebase/firestore'
 import { tenants } from '@/lib/db/refs'
+import { adminDb } from '../src/lib/admin'
 
 async function main(){
   const email = process.env.SEED_EMAIL!, pass = process.env.SEED_PASS!

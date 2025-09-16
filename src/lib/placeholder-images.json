@@ -1,3 +1,28 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "user-avatar",
+      "description": "User profile avatar",
+      "imageUrl": "https://picsum.photos/seed/1/40/40",
+      "imageHint": "person face"
+    },
+    {
+      "id": "goal-vacation",
+      "description": "Savings goal for a vacation",
+      "imageUrl": "https://picsum.photos/seed/2/400/200",
+      "imageHint": "tropical beach"
+    },
+    {
+      "id": "goal-car",
+      "description": "Savings goal for a new car",
+      "imageUrl": "https://picsum.photos/seed/3/400/200",
+      "imageHint": "modern car"
+    },
+    {
+      "id": "goal-house",
+      "description": "Savings goal for a house down payment",
+      "imageUrl": "https://picsum.photos/seed/4/400/200",
+      "imageHint": "suburban house"
+    }
+  ]
 }

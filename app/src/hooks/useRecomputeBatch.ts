@@ -11,7 +11,7 @@ export function useRecomputeBatch(){
     if (!unique.length) return;
     
     setProgress({ done:0, total: unique.length })
-    const { id } = toast({ title: 'Recomputing budgets...', description: `0 of ${unique.length} complete` })
+    const { id, update } = toast({ title: 'Recomputing budgets...', description: `0 of ${unique.length} complete` })
 
     for (let i=0; i<unique.length; i++){
       try {
@@ -20,16 +20,16 @@ export function useRecomputeBatch(){
         
         const newProgress = { done: i+1, total: unique.length }
         setProgress(newProgress)
-        toast({ id, title: 'Recomputing budgets...', description: `${newProgress.done} of ${newProgress.total} complete` })
+        update({ id, title: 'Recomputing budgets...', description: `${newProgress.done} of ${newProgress.total} complete` })
 
       } catch (e: any) {
-        toast({ id, title: 'Recompute failed', description: `Error on date ${unique[i]}: ${e.message}`, variant: 'destructive' })
+        update({ id, title: 'Recompute failed', description: `Error on date ${unique[i]}: ${e.message}`, variant: 'destructive' })
         setProgress(null)
         return // Stop on first error
       }
     }
     
-    toast({ id, title: 'Recompute complete!', description: `Finished ${unique.length} dates.` })
+    update({ id, title: 'Recompute complete!', description: `Finished ${unique.length} dates.` })
     // briefly delay before clearing progress
     setTimeout(()=> setProgress(null), 1500)
   }

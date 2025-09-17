@@ -13,7 +13,13 @@ export function DriftButton({ ruleId }: { ruleId:string }){
     const headers: HeadersInit = { 'content-type':'application/json' }
     ;(headers as any)['x-dev-auth-uid'] = 'dev-user'
     const r = await fetch('/api/categorizer/rules/drift', { method:'POST', headers, body: JSON.stringify({ tenantId:'dev', ruleId, lookbackDays:30 }) })
-    const j = await (r.ok? r.json(): r.text()); if(!r.ok) throw new Error(String(j))
+    if(!r.ok) {
+        const errText = await r.text();
+        console.error("Drift report failed:", errText);
+        setData({ error: `Drift report failed: ${errText}` });
+        return;
+    }
+    const j = await r.json();
     setData(j)
   }
 
@@ -27,6 +33,7 @@ export function DriftButton({ ruleId }: { ruleId:string }){
           <DialogTitle>Drift report for rule: {ruleId}</DialogTitle>
         </DialogHeader>
         {data ? (
+          data.error ? <div className="text-sm text-rose-600">{data.error}</div> :
           <div className="space-y-2 text-sm">
             <div>Matched: {data.matched}</div>
             <div>Applied by rule: {data.applied}</div>

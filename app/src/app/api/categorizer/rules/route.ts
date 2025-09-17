@@ -11,16 +11,11 @@ const Rule = z.object({
   name: z.string().optional(),
 })
 
-function devUid(req: NextRequest){
-  const bypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1' && req.headers.get('x-dev-auth-uid')
-  return bypass ? String(bypass) : null
-}
-
 async function requireUid(req: NextRequest){
-  const d = devUid(req)
-  if (d) return d
-  const authz = req.headers.get('authorization') || ''
-  if (!authz.startsWith('Bearer ')) return null
+  const bypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1' && req.headers.get('x-dev-auth-uid');
+  if (bypass) return String(bypass);
+  const authz = req.headers.get('authorization') || '';
+  if (!authz.startsWith('Bearer ')) return null;
   try { const tok = await adminAuth.verifyIdToken(authz.slice(7)); return tok.uid } catch { return null }
 }
 
@@ -65,3 +60,6 @@ export async function DELETE(req: NextRequest){
   await adminDb.doc(`tenants/${tenantId}/categorizer_rules/${id}`).delete()
   return Response.json({ ok: true })
 }
+
+export async function PUT() { return new Response('Method Not Allowed', { status: 405 }) }
+export async function PATCH() { return new Response('Method Not Allowed', { status: 405 }) }

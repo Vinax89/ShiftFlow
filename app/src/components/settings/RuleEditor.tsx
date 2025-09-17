@@ -69,6 +69,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
   }
 
   async function remove(id: string){
+    if(!confirm(`Are you sure you want to delete rule ${id}?`)) return;
     const headers: HeadersInit = {}
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
     const res = await fetch(`/api/categorizer/rules?tenantId=dev&id=${encodeURIComponent(id)}`, { method: 'DELETE', headers })
@@ -111,6 +112,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
       setPreview(null)
       setBusy('done')
       toast({ title: 'Apply complete', description: `Updated ${body.updated} txns; recomputed ${body.recomputed} periods` })
+      await refresh(); // Refresh rules to show any changes
     }
   }
 
@@ -144,13 +146,14 @@ export function RuleEditor({ initial }: { initial: any[] }){
     setBusy('recomputing')
     const headers: HeadersInit = { 'content-type': 'application/json' }
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const res = await fetch(`/api/categorizer/apply`, { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', dryRun: false, onlyTxIds: ids }) })
+    const res = await fetch(`/api/categorizer/apply`, { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', dryRun: false, onlyTxIds: ids, triggerRecompute: true }) })
     const body = await (res.ok ? res.json() : res.text())
     setBusy('done')
     if (!res.ok) { toast({ variant: 'destructive', title: 'Apply failed', description: String(body).slice(0,300) }); return }
     toast({ title: 'Applied selected', description: `Updated ${body.updated} txns; recomputed ${body.recomputed} periods` })
     // clear preview after apply
     setPreview(null); setSelectedIds(new Set()); setMerchantKeep({})
+    await refresh()
   }
 
   async function openCreateFor(merchant: string){
@@ -171,7 +174,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
     const res = await fetch(`/api/categorizer/rules?tenantId=dev`, { method:'POST', headers, body: JSON.stringify({ tenantId: 'dev', merchantPattern: createMerchant, envId }) })
     const body = await (res.ok ? res.json() : res.text())
-    if (!res.ok) { toast({ title:'Create rule failed', description: String(body).slice(0,300) }); return }
+    if (!res.ok) { toast({ variant: 'destructive', title:'Create rule failed', description: String(body).slice(0,300) }); return }
     toast({ title:'Rule created', description: `${createMerchant} → ${envId}` })
     setCreateOpen(false)
     await refresh()
@@ -204,7 +207,8 @@ export function RuleEditor({ initial }: { initial: any[] }){
             <tr key={r.id} className="border-t">
               <td className="p-2 font-mono text-xs">{r.merchantPattern}</td>
               <td className="p-2">{(r.splits||[]).map((s:any)=>`${s.envId} (${s.pct}%)`).join(', ')}</td>
-              <td className="p-2">
+              <td className="p-2 flex gap-2">
+                <DriftButton ruleId={r.id} />
                 <button onClick={()=>remove(r.id)} className="px-2 py-1 rounded border">Delete</button>
               </td>
             </tr>
@@ -357,7 +361,6 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                       className="px-2 py-1 border rounded"
                                       onClick={async()=>{
                                         try {
-                                          // recompute live simulation on last 100 txns
                                           const headers: HeadersInit = { 'content-type': 'application/json' }
                                           if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
                                           const body = {
@@ -377,7 +380,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                           }))
                                           toast({ title: 'Simulated', description: `${j.hits} matches in last 100 txns` })
                                         } catch(e:any) {
-                                          toast({ title: 'Simulation failed', description: String(e).slice(0,200) })
+                                          toast({ variant: 'destructive', title: 'Simulation failed', description: String(e).slice(0,200) })
                                         }
                                       }}
                                     >Simulate (last 100)</button>
@@ -398,7 +401,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                           if (!res.ok) throw new Error(await res.text())
                                           toast({ title: 'Rule updated', description: 'Saved edits' })
                                         } catch(e:any) {
-                                          toast({ title: 'Save failed', description: String(e).slice(0,200) })
+                                          toast({ variant: 'destructive', title: 'Save failed', description: String(e).slice(0,200) })
                                         }
                                       }}
                                     >Save edits</button>
@@ -426,7 +429,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                           await runRecompute(j.dates || [], h)
                                           toast({ title: 'Recompute complete', description: `${(j.dates||[]).length} dates refreshed` })
                                         } catch(e:any) {
-                                          toast({ title: 'Apply failed', description: String(e).slice(0,200) })
+                                          toast({ variant: 'destructive', title: 'Apply failed', description: String(e).slice(0,200) })
                                         }
                                       }}
                                     >Apply to matches</button>
@@ -442,7 +445,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                           if (!r.ok) throw new Error(String(j))
                                           toast({ title: 'Undo complete', description: `${j.undone} transactions reverted` })
                                         } catch(e:any) {
-                                          toast({ title: 'Undo failed', description: String(e).slice(0,200) })
+                                          toast({ variant: 'destructive', title: 'Undo failed', description: String(e).slice(0,200) })
                                         }
                                       }}
                                     >Undo last apply</button>
@@ -476,8 +479,8 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                        </table>
                                      </div>
                                     )}
-
-                                  <div className="flex items-center gap-3">
+                                  
+                                  <div className="mt-4 flex items-center gap-3">
                                     <Label htmlFor={`rule-act-${p.matchReason.ruleId}`} className="text-gray-500">Active</Label>
                                     <Switch id={`rule-act-${p.matchReason.ruleId}`}
                                       checked={!!p.matchReason.active}
@@ -494,14 +497,11 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                           }) : row))
                                           toast({ title: 'Rule updated', description: `rule:${p.matchReason.ruleId} active=${!!val}` })
                                         } catch (e:any) {
-                                          toast({ title: 'Update failed', description: String(e).slice(0,200) })
+                                          toast({ variant: 'destructive', title: 'Update failed', description: String(e).slice(0,200) })
                                         }
                                       }}
                                     />
                                   </div>
-                                   <div className="mt-2">
-                                     <DriftButton ruleId={(p.matchReason as any).ruleId} />
-                                   </div>
                                    {progress && <div className="text-xs text-gray-600">Recompute: {progress.done}/{progress.total}</div>}
                                 </PopoverContent>
                               </Popover>

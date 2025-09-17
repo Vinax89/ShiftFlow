@@ -18,7 +18,7 @@ async function fetchRules(){
 export default async function Page(){
   const data = await fetchRules()
   return (
-    <div className="p-6 max-w-3xl">
+    <div className="p-6 max-w-4xl">
       <h1 className="text-xl font-semibold mb-4">Categorizer Rules</h1>
       <p className="text-sm text-gray-500 mb-4">Regex → Envelope rules. Example: <code>market|grocery</code> → <code>Groceries</code>.</p>
       {/* @ts-expect-error Async Server Component boundary */}

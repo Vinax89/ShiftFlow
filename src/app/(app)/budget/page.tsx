@@ -60,15 +60,26 @@ function BudgetInner() {
       return r.json()
     } catch (e: any) {
         console.error('Failed to load budget data:', e);
-        // In case of any error, we return null to be handled gracefully by the UI.
-        return null;
+        throw e; // Re-throw to be caught by the new error boundary
     }
   }
 
   // simple RSC pattern
   // @ts-expect-error Async Server Component
   const View = async () => {
-    const data = await load()
+    let data;
+    try {
+      data = await load()
+    } catch (e: any) {
+      return (
+        <div className="p-6 space-y-4">
+          <h1 className="text-xl font-semibold">Budget</h1>
+          <p className="text-sm text-gray-600">We couldn’t compute a period yet. Try recompute below. If you haven’t seeded dev data, run the seed script once.</p>
+          <BudgetRescue />
+          <pre className="text-xs bg-gray-50 p-3 rounded border overflow-auto">{String(e)}</pre>
+        </div>
+      )
+    }
 
     if (!data) {
       return (
@@ -106,6 +117,25 @@ function BudgetInner() {
     )
   }
   return <View />
+}
+
+// Client helper to trigger recompute
+function BudgetRescue(){
+  'use client'
+  const [busy, setBusy] = require('react').useState(false)
+  return <button disabled={busy} onClick={async()=>{
+    setBusy(true)
+    try {
+      const headers: HeadersInit = { 'content-type': 'application/json' }
+      if (typeof window !== 'undefined') (headers as any)['x-dev-auth-uid'] = 'dev-user'
+      const today = new Date().toISOString().slice(0,10)
+      const r = await fetch('/api/budget/recompute', { method:'POST', headers, body: JSON.stringify({ tenantId:'dev', dates:[today] }) })
+      if (!r.ok) throw new Error(await r.text())
+      location.reload()
+    } catch (e:any) {
+      alert(String(e))
+    } finally { setBusy(false) }
+  }} className="px-3 py-1.5 rounded border bg-white">{busy?'Recomputing…':'Recompute now'}</button>
 }
 
 export default function Page(){

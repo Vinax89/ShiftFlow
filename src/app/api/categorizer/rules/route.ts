@@ -1,3 +1,4 @@
+
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { adminDb, adminAuth } from '@/lib/admin'
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest){
 
 export async function POST(req: NextRequest){
   const uid = await requireUid(req)
-  if (!uid) return new Response('unauthorized', { status: 401 })
+  if (!uid) return new Response('Unauthorized', { status: 401 })
   const body = await req.json()
   const url = new URL(req.url)
   const tenantId = url.searchParams.get('tenantId') || 'dev'
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest){
 
 export async function DELETE(req: NextRequest){
   const uid = await requireUid(req)
-  if (!uid) return new Response('unauthorized', { status: 401 })
+  if (!uid) return new Response('Unauthorized', { status: 401 })
   const url = new URL(req.url)
   const tenantId = url.searchParams.get('tenantId') || 'dev'
   const id = url.searchParams.get('id')

@@ -32,7 +32,7 @@ async function requireUid(req: NextRequest){
 
 async function loadRules(tenantId: string){
   const snap = await adminDb.collection(`tenants/${tenantId}/categorizer_rules`).get()
-  return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Array<{id:string, merchantPattern:string, envId:string, pct?:number, active?: boolean}>
+  return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Array<{id:string, merchantPattern:string, envId:string, pct?:number, active?: boolean, splits?: Array<{ envId:string; pct:number }>}>
 }
 
 export async function POST(req: NextRequest){

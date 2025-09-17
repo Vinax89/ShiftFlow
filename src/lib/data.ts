@@ -6,6 +6,7 @@ import {
   Calendar,
   Landmark,
   LineChart,
+  Settings,
 } from 'lucide-react';
 import { type NavItem, type Transaction, type Goal, type Bill } from './types';
 import { PlaceHolderImages } from './placeholder-images';
@@ -45,6 +46,11 @@ export const navItems: NavItem[] = [
     title: 'Cashflow',
     href: '/cashflow',
     icon: LineChart,
+  },
+  {
+    title: 'Settings',
+    href: '/settings',
+    icon: Settings,
   },
 ];
 

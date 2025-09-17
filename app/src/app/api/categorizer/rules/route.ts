@@ -30,8 +30,8 @@ export async function GET(req: NextRequest){
   const url = new URL(req.url)
   const tenantId = url.searchParams.get('tenantId') || 'dev'
   const snap = await adminDb.collection(`tenants/${tenantId}/categorizer_rules`).orderBy('createdAt','desc').limit(200).get()
-  const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
-  return Response.json({ items })
+  const rules = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
+  return Response.json({ rules })
 }
 
 export async function POST(req: NextRequest){

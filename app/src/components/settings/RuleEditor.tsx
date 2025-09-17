@@ -1,3 +1,4 @@
+
 'use client'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -6,6 +7,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { useRecomputeBatch } from '@/hooks/useRecomputeBatch'
+import { DriftButton } from '@/components/settings/DriftButton'
 
 export function RuleEditor({ initial }: { initial: any[] }){
   const [rules, setRules] = useState(initial)
@@ -33,7 +35,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
   async function refresh(){
     const resp = await fetch(`/api/categorizer/rules?tenantId=dev`, { headers: dev ? { 'x-dev-auth-uid': 'dev-user' } : undefined, cache: 'no-store' })
     const data = await resp.json();
-    setRules(data.items || [])
+    setRules(data.rules || [])
   }
   useEffect(()=>{ setRules(initial) }, [initial])
 

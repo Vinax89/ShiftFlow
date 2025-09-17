@@ -1,3 +1,4 @@
+
 import { headers as nextHeaders } from 'next/headers'
 import { Suspense } from 'react'
 import { RuleEditor } from '@/components/settings/RuleEditor'

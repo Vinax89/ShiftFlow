@@ -18,16 +18,11 @@ const Body = z.object({
   excludeMerchants: z.array(z.string()).optional(),
 })
 
-function devUid(req: NextRequest){
-  const bypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1' && req.headers.get('x-dev-auth-uid')
-  return bypass ? String(bypass) : null
-}
-
 async function requireUid(req: NextRequest){
-  const d = devUid(req)
-  if (d) return d
-  const authz = req.headers.get('authorization') || ''
-  if (!authz.startsWith('Bearer ')) return null
+  const bypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1' && req.headers.get('x-dev-auth-uid');
+  if (bypass) return String(bypass);
+  const authz = req.headers.get('authorization') || '';
+  if (!authz.startsWith('Bearer ')) return null;
   try { const tok = await adminAuth.verifyIdToken(authz.slice(7)); return tok.uid } catch { return null }
 }
 
@@ -60,7 +55,7 @@ export async function POST(req: NextRequest){
   } else {
     const txSnap = await adminDb
       .collection(`tenants/${tenantId}/transactions`)
-      .where('date','>=', since)
+      .where('date','>=', new Date(since))
       .orderBy('date','desc')
       .limit(500)
       .get()
@@ -100,15 +95,17 @@ export async function POST(req: NextRequest){
     if (excRe.length && excRe.some(r=>r.test(merchant))) continue
     
     const { splits, ruleHit } = inferSplits(rules, merchant, amount)
-    if (!splits.length) continue
+    
 
     const idxRef = adminDb.doc(`tenants/${tenantId}/budget_tx_index/${d.id}`)
     const idx = await idxRef.get()
-    if (idx.exists) continue // do not clobber manual/rule choices
+    if (idx.exists && idx.data()?.source !== 'apply_now') continue // do not clobber manual/rule choices, but allow re-application of `apply_now`
 
     // derive YYYY-MM-DD for recompute date bucket
     const dt = tx.date && tx.date.toDate ? tx.date.toDate() : (typeof tx.date==='number' ? new Date(tx.date) : new Date())
     const ymd = isNaN(+dt) ? new Date().toISOString().slice(0,10) : dt.toISOString().slice(0,10)
+    
+    if (!splits.length) continue
 
     if (dryRun) {
       if (preview.length < previewLimit) preview.push({
@@ -126,30 +123,32 @@ export async function POST(req: NextRequest){
             ? (ruleHit as any).splits as Array<{ envId:string; pct:number }>
             : null
           const computed = pctSplits
-            ? pctSplits.map((s, i) => ({ envId: s.envId, pct: s.pct, amountCents: i === pctSplits!.length-1
-                ? amount - Math.round((pctSplits!.slice(0,-1).reduce((a,b)=>a + amount * b.pct / 100, 0)))
-                : Math.round(amount * s.pct / 100) }))
+            ? pctSplits.map((s, i) => {
+              const remainingAmount = amount - pctSplits!.slice(0,i).reduce((acc,p) => acc + Math.round(amount * p.pct/100),0)
+              return { envId: s.envId, pct: s.pct, amountCents: i === pctSplits!.length-1 ? remainingAmount : Math.round(amount * s.pct / 100) }
+            })
             : (splits || []).map(s => ({ envId: s.envId, pct: Math.round((s.amountCents/amount)*100), amountCents: s.amountCents }))
           return { regex: ruleHit.merchantPattern, flags: 'i', groups, splits: computed }
         })() : undefined,
       })
     } else {
-      batch.set(idxRef, { splits, source: 'apply_now', updatedAt: Date.now() }, { merge: true })
+      batch.set(idxRef, { splits, source: 'apply_now', ruleId: ruleHit?.id, updatedAt: Date.now() }, { merge: true })
+      updated++
+      dates.add(ymd)
     }
-    updated++
-    dates.add(ymd)
   }
 
   if (updated && !dryRun) await batch.commit()
 
   // coalesced recompute via same-host call (API already has a lock)
-  const proto = process.env.INTERNAL_PROTO || 'http'
-  const host = process.env.INTERNAL_HOST || 'localhost:9010'
+  const proto = req.headers.get('x-forwarded-proto') || 'http'
+  const host = req.headers.get('host') || 'localhost:9010'
   const origin = `${proto}://${host}`
   let recomputed = 0
   if (updated && !dryRun) {
+    const devUidHeader = req.headers.get('x-dev-auth-uid')
     const resp = await fetch(`${origin}/api/budget/recompute`, {
-      method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-auth-uid': 'dev-user' },
+      method: 'POST', headers: { 'content-type': 'application/json', ...(devUidHeader ? {'x-dev-auth-uid': devUidHeader} : {}) },
       body: JSON.stringify({ tenantId, dates: Array.from(dates) })
     })
     if (resp.ok) recomputed = (await resp.json()).results?.length ?? 0
@@ -157,3 +156,8 @@ export async function POST(req: NextRequest){
 
   return Response.json({ updated, recomputed, dates: Array.from(dates).sort(), dryRun, preview })
 }
+
+export async function GET() { return new Response('Method Not Allowed', { status: 405 }) }
+export async function PUT() { return new Response('Method Not Allowed', { status: 405 }) }
+export async function DELETE() { return new Response('Method Not Allowed', { status: 405 }) }
+export async function PATCH() { return new Response('Method Not Allowed', { status: 405 }) }

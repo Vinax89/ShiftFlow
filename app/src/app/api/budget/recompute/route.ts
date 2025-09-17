@@ -64,7 +64,14 @@ export async function POST(req: NextRequest) {
   try {
     const uid = await getUid(req)
     if (!uid) return new Response('Unauthorized', { status: 401 })
-    const parsed = Body.parse(await req.json())
+    
+    let parsed
+    try {
+      parsed = Body.parse(await req.json())
+    } catch (e: any) {
+      return new Response(`bad request: ${e.message}`, { status: 400 })
+    }
+    
     const { tenantId, dates } = parsed
     let { planId } = parsed
 

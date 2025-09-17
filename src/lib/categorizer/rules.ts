@@ -14,7 +14,7 @@ export async function loadRules(tenantId: string): Promise<CatRule[]> {
   return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
 }
 
-export function inferSplits(rules: CatRule[], merchant: string, amountCents: number) {
+export function inferSplits(rules: CatRule[], merchant: string, amountCents: number): { splits: Array<{ envId: string; amountCents: number }>, ruleHit: CatRule | null } {
   // For expenses (negative amounts), split positive cents across envelopes
   const abs = Math.abs(amountCents)
   const matches = rules.filter(r => new RegExp(r.merchantPattern, 'i').test(merchant))

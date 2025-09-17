@@ -299,7 +299,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                   <div className="font-medium mb-1">Why this rule?</div>
                                   <div className="mb-1"><span className="text-gray-500">Pattern:</span> <code>/{p.why?.regex}/{p.why?.flags}</code></div>
                                   {p.why?.groups?.length ? (
-                                    <div className="mb-1"><span className="text-gray-500">Groups:</span> {p.why?.groups.map((g,i)=>(<code key={i} className="mr-1">${i+1}:{g}</code>))}</div>
+                                    <div className="mb-1"><span className="text-gray-500">Groups:</span> {p.why?.groups.map((g:any,i:number)=>(<code key={i} className="mr-1">${i+1}:{g}</code>))}</div>
                                   ) : null}
                                   <div className="mb-1 text-gray-500">Split math:</div>
                                   <ul className="mb-2 list-disc pl-5">

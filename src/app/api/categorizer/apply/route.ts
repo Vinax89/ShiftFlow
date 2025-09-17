@@ -32,7 +32,7 @@ async function requireUid(req: NextRequest){
 
 async function loadRules(tenantId: string){
   const snap = await adminDb.collection(`tenants/${tenantId}/categorizer_rules`).get()
-  return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Array<{id:string, merchantPattern:string, envId:string, pct?:number}>
+  return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Array<{id:string, merchantPattern:string, envId:string, pct?:number, active?: boolean}>
 }
 
 export async function POST(req: NextRequest){
@@ -42,6 +42,8 @@ export async function POST(req: NextRequest){
 
   const since = Date.now() - days*24*60*60*1000
   let rules = await loadRules(tenantId)
+  // NEW: respect rule activation
+  rules = rules.filter(r => r.active !== false)
   if (merchantPattern){
     rules = rules.filter(r => r.id === merchantPattern || r.merchantPattern === merchantPattern)
   }
@@ -73,7 +75,14 @@ export async function POST(req: NextRequest){
     merchant:string,
     amountCents:number,
     splits:Array<{envId:string,amountCents:number}>,
-    matchReason: { type:'rule'; ruleId:string; pattern:string } | { type:'none' }
+    matchReason: { type:'rule'; ruleId:string; pattern:string; active?: boolean } | { type:'none' },
+    // NEW: explain why
+    why?: {
+      regex: string
+      flags: string
+      groups: string[]
+      splits: Array<{ envId:string; pct:number; amountCents:number }>
+    }
   }>=[]
 
   // compile merchant regex filters once
@@ -107,7 +116,21 @@ export async function POST(req: NextRequest){
         merchant,
         amountCents: amount,
         splits,
-        matchReason: ruleHit ? { type:'rule', ruleId: ruleHit.id, pattern: ruleHit.merchantPattern } : { type:'none' },
+        matchReason: ruleHit ? { type:'rule', ruleId: ruleHit.id, pattern: ruleHit.merchantPattern, active: ruleHit.active !== false } : { type:'none' },
+        why: ruleHit ? (function(){
+          let groups: string[] = []
+          try { const m = new RegExp(ruleHit.merchantPattern, 'i').exec(merchant); if (m) groups = Array.from(m).slice(1) } catch {}
+          // derive split math from ruleHit.splits (pct) if present; fall back to computed splits (amountCents)
+          const pctSplits = Array.isArray((ruleHit as any).splits) && (ruleHit as any).splits.length && 'pct' in (ruleHit as any).splits[0]
+            ? (ruleHit as any).splits as Array<{ envId:string; pct:number }>
+            : null
+          const computed = pctSplits
+            ? pctSplits.map((s, i) => ({ envId: s.envId, pct: s.pct, amountCents: i === pctSplits!.length-1
+                ? amount - Math.round((pctSplits!.slice(0,-1).reduce((a,b)=>a + amount * b.pct / 100, 0)))
+                : Math.round(amount * s.pct / 100) }))
+            : (splits || []).map(s => ({ envId: s.envId, pct: Math.round((s.amountCents/amount)*100), amountCents: s.amountCents }))
+          return { regex: ruleHit.merchantPattern, flags: 'i', groups, splits: computed }
+        })() : undefined,
       })
     } else {
       batch.set(idxRef, { splits, source: 'apply_now', updatedAt: Date.now() }, { merge: true })

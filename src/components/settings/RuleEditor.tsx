@@ -2,6 +2,9 @@
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 
 export function RuleEditor({ initial }: { initial: any[] }){
   const [rules, setRules] = useState(initial)
@@ -285,11 +288,53 @@ export function RuleEditor({ initial }: { initial: any[] }){
                           {(p.splits||[]).map((s:any)=>`${s.envId}:${(s.amountCents/100).toFixed(2)}`).join(', ')}
                         </td>
                         <td className="px-2 py-1 text-xs text-gray-600">
-                          {p.matchReason?.type==='rule' ? `rule:${p.matchReason.ruleId}` : '—'}
+                          {p.matchReason?.type==='rule' ? (
+                            <div className="inline-flex items-center gap-2">
+                              <span>{`rule:${p.matchReason.ruleId}`}</span>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button className="underline text-blue-600">Why?</button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[340px] text-xs">
+                                  <div className="font-medium mb-1">Why this rule?</div>
+                                  <div className="mb-1"><span className="text-gray-500">Pattern:</span> <code>/{p.why?.regex}/{p.why?.flags}</code></div>
+                                  {p.why?.groups?.length ? (
+                                    <div className="mb-1"><span className="text-gray-500">Groups:</span> {p.why?.groups.map((g,i)=>(<code key={i} className="mr-1">${i+1}:{g}</code>))}</div>
+                                  ) : null}
+                                  <div className="mb-1 text-gray-500">Split math:</div>
+                                  <ul className="mb-2 list-disc pl-5">
+                                    {p.why?.splits?.map((s:any,i:number)=>(<li key={i}><code>{s.envId}</code> · {s.pct}% → {(s.amountCents/100).toFixed(2)}</li>))}
+                                  </ul>
+                                  <div className="flex items-center gap-3">
+                                    <Label htmlFor={`rule-act-${p.matchReason.ruleId}`} className="text-gray-500">Active</Label>
+                                    <Switch id={`rule-act-${p.matchReason.ruleId}`}
+                                      checked={!!p.matchReason.active}
+                                      onCheckedChange={async(val)=>{
+                                        try {
+                                          const headers: HeadersInit = { 'content-type': 'application/json' }
+                                          if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
+                                          const res = await fetch(`/api/categorizer/rules/${p.matchReason.ruleId}`, { method:'PATCH', headers, body: JSON.stringify({ tenantId: 'dev', active: !!val }) })
+                                          if (!res.ok) throw new Error(await res.text())
+                                          // reflect in local preview state immutably
+                                          setPreview(prev => prev!.map(row => row.txId===p.txId ? ({
+                                            ...row,
+                                            matchReason: { ...(row.matchReason as any), active: !!val }
+                                          }) : row))
+                                          toast({ title: 'Rule updated', description: `rule:${p.matchReason.ruleId} active=${!!val}` })
+                                        } catch (e:any) {
+                                          toast({ title: 'Update failed', description: String(e).slice(0,200) })
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                          ) : '—'}
                         </td>
                       </tr>
                     ))}
-                    {!preview.length && <tr><td colSpan={4} className="text-center p-4 text-gray-500">No transactions to update.</td></tr>}
+                    {!preview.length && <tr><td colSpan={6} className="text-center p-4 text-gray-500">No transactions to update.</td></tr>}
                   </tbody>
                 </table>
               </div>

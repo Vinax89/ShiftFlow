@@ -18,6 +18,6 @@ test('settings/categorizer dry run flow shows preview', async ({ page }) => {
   await page.getByLabel('Days').fill('7')
   const dryToggle = page.getByText('Dry run')
   await expect(dryToggle).toBeVisible()
-  await page.getByRole('button', { name: 'Run' }).click()
+  await page.getByRole('button', { name: /Run/ }).click()
   await expect(page.getByText('Dry run result')).toBeVisible({ timeout: 15000 })
 })

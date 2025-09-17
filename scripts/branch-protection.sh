@@ -10,6 +10,7 @@ OWNER_REPO="${1:?usage: $0 <owner/repo>}"
 checks=(
   "Node.js CI / build (22.x)"
   "SAST (Bearer) / pr-diff"
+  "APIsec DAST / Scan APIs"
 )
 
 for BR in main spec-001-fixes; do

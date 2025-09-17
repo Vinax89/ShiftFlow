@@ -23,7 +23,7 @@ export default async function Page(){
       <p className="text-sm text-gray-500 mb-4">Regex → Envelope rules. Example: <code>market|grocery</code> → <code>Groceries</code>.</p>
       {/* @ts-expect-error Async Server Component boundary */}
       <Suspense>
-        <RuleEditor initial={data.rules || []} />
+        <RuleEditor initial={data.items || []} />
       </Suspense>
     </div>
   )

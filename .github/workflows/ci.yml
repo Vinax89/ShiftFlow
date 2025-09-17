@@ -1,37 +1,73 @@
-name: ci
+name: Node.js CI
+
 on:
-  pull_request:
-    branches: [main, spec-001-fixes]
   push:
-    branches: [main]
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  spec001:
+  build:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
     permissions:
       contents: read
+
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      CI: true
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
-          node-version: 22.x
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
-      - run: npm ci
+
+      - name: Install
+        run: npm ci
+
+      # Non-blocking typecheck/lint (import-order can warn)
       - name: Typecheck + Lint (non-blocking for import-order)
         run: |
           npm run -s typecheck || true
           npm run -s lint || true
-      - name: Start server and run Lighthouse (mobile budgets)
+
+      # Blocking export audit per SPEC-001
+      - name: Export audit (blocking)
+        run: node scripts/audit-exports.js
+
+      - name: Build (prod)
+        run: npm run build
+
+      - name: Install Playwright browsers
+        if: matrix.node-version == '22.x'
+        run: npx playwright install --with-deps
+
+      - name: Start server, run E2E + Lighthouse budgets (mobile)
+        if: matrix.node-version == '22.x'
         run: |
-          npx --yes start-server-and-test "npm run serve:prod" http-get://localhost:9000/api/healthz "npx playwright install --with-deps && npx playwright test && npx lighthouse http://localhost:9000 --preset=perf --form-factor=mobile --screenEmulation.mobile --budget-path=./lighthouse-budgets.json --quiet --output=json --output-path=./lh.json"
-      - name: Upload LH report
+          npx --yes start-server-and-test \
+            "npm run start" \
+            http-get://localhost:9000 \
+            "bash -lc 'npx playwright test && npx lighthouse http://localhost:9000 --preset=perf --form-factor=mobile --screenEmulation.mobile --budget-path=./lighthouse-budgets.json --quiet --output=json --output-path=./lh.json'"
+
+      - name: Upload Lighthouse report
+        if: matrix.node-version == '22.x'
         uses: actions/upload-artifact@v4
         with:
           name: lh-json
           path: lh.json
-      - name: Playwright E2E (smoke)
-        run: |
-          npx --yes playwright install --with-deps
-          BASE_URL=http://localhost:9000 npx playwright test tests/e2e/*.spec.ts --reporter=line

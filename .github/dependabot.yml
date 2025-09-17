@@ -1,0 +1,75 @@
+version: 2
+updates:
+  # ──────────────────────────────────────────────────────────────────────────────
+  # 1) NPM — weekly on main (grouped by patch/minor)
+  # ──────────────────────────────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: sunday
+      time: "23:30"
+      timezone: "America/Los_Angeles"
+    target-branch: main
+    open-pull-requests-limit: 10
+    versioning-strategy: auto
+    rebase-strategy: auto
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: scope
+    groups:
+      npm-patch:
+        applies-to: version-updates
+        update-types: ["patch"]
+        patterns: ["*"]
+      npm-minor:
+        applies-to: version-updates
+        update-types: ["minor"]
+        patterns: ["*"]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+    ignore:
+      # Avoid surprise framework/toolchain majors; we’ll schedule those explicitly.
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "firebase"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint*"
+        update-types: ["version-update:semver-major"]
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # 2) NPM — daily patches on spec-001-fixes (keeps the work branch healthy)
+  # ──────────────────────────────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "06:00"
+      timezone: "America/Los_Angeles"
+    target-branch: spec-001-fixes
+    open-pull-requests-limit: 5
+    versioning-strategy: auto
+    rebase-strategy: auto
+    groups:
+      patches-only:
+        applies-to: version-updates
+        update-types: ["patch"]
+        patterns: ["*"]
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # 3) GitHub Actions — weekly
+  # ──────────────────────────────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: sunday
+      time: "23:45"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5

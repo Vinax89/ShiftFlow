@@ -49,6 +49,9 @@ function BudgetInner() {
     }
     if (!r.ok) {
       const body = await r.text().catch(()=>'')
+      if (r.status === 404) {
+        return null; // Gracefully handle not found after retry
+      }
       throw new Error(`GET /api/budget/read ${r.status} ${body}`)
     }
     return r.json()
@@ -58,6 +61,16 @@ function BudgetInner() {
   // @ts-expect-error Async Server Component
   const View = async () => {
     const data = await load()
+
+    if (!data) {
+      return (
+        <div className="p-6">
+          <h1 className="text-xl font-semibold mb-4">Budget Not Ready</h1>
+          <p className="text-muted-foreground">The budget for the current period is still being calculated. Please try again in a moment.</p>
+        </div>
+      )
+    }
+
     return (
       <div className="p-6">
         <h1 className="text-xl font-semibold mb-4">Budget — {data.periodKey}</h1>
@@ -89,7 +102,7 @@ function BudgetInner() {
 
 export default function Page(){
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div className="p-6">Loading budget...</div>}>
       {/* uses server fetches, safe in RSC */}
       {/* @ts-expect-error Async Server Component */}
       <BudgetInner />

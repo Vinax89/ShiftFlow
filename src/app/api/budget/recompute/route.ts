@@ -20,6 +20,45 @@ async function getUid(req: NextRequest): Promise<string|null> {
   try { const d = await adminAuth.verifyIdToken(authz.slice(7)); return d.uid } catch { return null }
 }
 
+async function ensureBaselinePlan(tenantId: string) {
+  // Create tenant doc + baseline plan + a few envelopes if they don't exist
+  const tenantRef = adminDb.doc(`tenants/${tenantId}`)
+  const planId = 'baseline'
+  const planRef = adminDb.doc(`tenants/${tenantId}/budget_plans/${planId}`)
+  await adminDb.runTransaction(async (trx) => {
+    const tSnap = await trx.get(tenantRef)
+    if (!tSnap.exists) {
+      trx.set(tenantRef, { activePlanId: planId, tz: 'UTC', createdAt: Date.now(), updatedAt: Date.now() })
+    } else if (!(tSnap.data() as any)?.activePlanId) {
+      trx.set(tenantRef, { activePlanId: planId, updatedAt: Date.now() }, { merge: true })
+    }
+    const pSnap = await trx.get(planRef)
+    if (!pSnap.exists) {
+      const plan: PlanDoc = {
+        name: 'Baseline',
+        active: true,
+        currency: 'USD',
+        tz: (tSnap.data() as any)?.tz || 'UTC',
+        periodConfig: { type: 'monthly', monthly: { startDay: 1 } },
+        rolloverPolicy: { positive: 'carry', negative: 'cap_zero' },
+      } as any
+      trx.set(planRef, { ...plan, createdAt: Date.now(), updatedAt: Date.now() }, { merge: true })
+    }
+  })
+  // Ensure a few default envelopes exist (idempotent)
+  const defaults: Array<EnvelopeDoc & { id: string }> = [
+    { id: 'Groceries', name: 'Groceries', group: 'needs', type: 'flex', plannedCents: 40000, sort: 1 } as any,
+    { id: 'Dining', name: 'Dining', group: 'wants', type: 'flex', plannedCents: 15000, sort: 2 } as any,
+    { id: 'Transport', name: 'Transport', group: 'needs', type: 'flex', plannedCents: 20000, sort: 3 } as any,
+  ]
+  for (const e of defaults) {
+    const ref = adminDb.doc(`tenants/${tenantId}/budget_plans/baseline/envelopes/${e.id}`)
+    const snap = await ref.get()
+    if (!snap.exists) await ref.set({ ...e, createdAt: Date.now(), updatedAt: Date.now() })
+  }
+  return 'baseline'
+}
+
 export async function POST(req: NextRequest) {
   try {
     const uid = await getUid(req)
@@ -30,7 +69,13 @@ export async function POST(req: NextRequest) {
 
     if (!planId) {
       const tSnap = await adminDb.doc(`tenants/${tenantId}`).get()
-      planId = (tSnap.data() as any)?.activePlanId || 'baseline'
+      planId = (tSnap.exists && (tSnap.data() as any)?.activePlanId) || 'baseline'
+    }
+
+    // Ensure plan exists (first-run bootstrap for new projects)
+    const pTry = await adminDb.doc(`tenants/${tenantId}/budget_plans/${planId}`).get()
+    if (!pTry.exists) {
+      planId = await ensureBaselinePlan(tenantId)
     }
 
     // Load plan + envelopes

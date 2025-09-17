@@ -5,6 +5,7 @@ import { adminAuth, adminDb } from '@/lib/admin'
 import { periodKeyFor } from '@/lib/budget/keys'
 import { computePeriod } from '@/lib/budget/compute'
 import type { PlanDoc, EnvelopeDoc, PeriodDoc, Txn } from '@/lib/budget/types'
+import { hash64 } from '@/lib/hashing/hash'
 
 const Body = z.object({
   tenantId: z.string(),
@@ -63,7 +64,14 @@ export async function POST(req: NextRequest) {
   try {
     const uid = await getUid(req)
     if (!uid) return new Response('Unauthorized', { status: 401 })
-    const parsed = Body.parse(await req.json())
+    
+    let parsed
+    try {
+      parsed = Body.parse(await req.json())
+    } catch (e: any) {
+      return new Response(`bad request: ${e.message}`, { status: 400 })
+    }
+    
     const { tenantId, dates } = parsed
     let { planId } = parsed
 
@@ -135,11 +143,12 @@ export async function POST(req: NextRequest) {
       const prev = prevSnap.exists ? (prevSnap.data() as PeriodDoc) : undefined
 
       const computed = computePeriod({ dateISO, plan, envelopes, txns, prevPeriod: prev })
+      const inputsHash = await hash64(JSON.stringify({ plan, envelopes, txns, prevPeriod: prev }))
 
       const pRef = adminDb.doc(`tenants/${tenantId}/budget_plans/${planId}/periods/${key}`)
       const existing = await pRef.get()
       const prevVersion = existing.exists ? (existing.data() as any).periodVersion ?? 0 : 0
-      await pRef.set({ ...computed, periodVersion: prevVersion + 1, status: 'ready', updatedAt: Date.now(), planSnapshotVersion: prevVersion + 1 }, { merge: true })
+      await pRef.set({ ...computed, inputsHash, periodVersion: prevVersion + 1, status: 'ready', updatedAt: Date.now(), planSnapshotVersion: prevVersion + 1 }, { merge: true })
       await adminDb.collection(`tenants/${tenantId}/budget_ledger`).add({ type: 'recompute', periodKey: key, createdAt: Date.now() })
 
       results.push({ dateISO, periodKey: key, ok: true })

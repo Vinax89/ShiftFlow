@@ -1,0 +1,22 @@
+# Replace the placeholder owners with your actual GitHub handles/teams.
+# If you have an org, prefer team slugs like @your-org/security or @your-org/infra.
+
+# Core runtime & infra
+/src/lib/firebase.ts                 @your-handle @your-org/infra
+/.github/workflows/**               @your-handle @your-org/infra
+/scripts/**                         @your-handle @your-org/infra
+
+# Budget engine & categorizer
+/src/lib/budget/**                  @your-handle @your-org/finance
+/src/lib/categorizer/**             @your-handle @your-org/ml
+
+# Taxes engine & rules
+/src/lib/tax/**                     @your-handle @your-org/tax
+/firestore.rules                    @your-handle @your-org/infra
+/firestore.indexes.json             @your-handle @your-org/infra
+
+# Public API surface
+/src/app/api/**                     @your-handle @your-org/infra
+
+# Perf budgets (SPEC‑001)
+/lighthouse-budgets.json            @your-handle @your-org/perf

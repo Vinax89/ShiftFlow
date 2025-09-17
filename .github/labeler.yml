@@ -1,0 +1,101 @@
+# Auto-label PRs by touched paths. Patterns support minimatch/globs.
+
+# ── Areas (features/engines) ────────────────────────────────────────────────
+"area:ui":
+  - "app/**"
+  - "src/components/**"
+  - "src/app/(app)/**/page.tsx"
+  - "src/app/(app)/**/layout.tsx"
+  - "src/app/globals.css"
+
+"area:api":
+  - "src/app/api/**"
+
+"area:budget":
+  - "src/lib/budget/**"
+  - "src/app/(app)/budget/**"
+  - "src/app/api/budget/**"
+
+"area:categorizer":
+  - "src/app/api/categorizer/**"
+  - "src/app/(app)/settings/categorizer/**"
+  - "src/lib/categorizer/**"
+
+"area:cashflow":
+  - "src/lib/cashflow/**"
+  - "src/app/(app)/cashflow/**"
+
+"area:tax":
+  - "src/lib/tax/**"
+  - "src/app/(app)/taxes/**"
+  - "functions/**/tax*"
+
+"area:goals":
+  - "src/app/(app)/goals/**"
+  - "src/lib/goals/**"
+
+# ── Platform / Firebase / Infra ─────────────────────────────────────────────
+"area:firebase":
+  - "src/lib/firebase.ts"
+  - "src/lib/messaging.ts"
+  - "functions/**"
+  - "firestore.rules"
+  - "firestore.indexes.json"
+
+"area:db":
+  - "src/lib/db/**"
+  - "firestore.rules"
+  - "firestore.indexes.json"
+
+"area:infra":
+  - "next.config.ts"
+  - "tailwind.config.*"
+  - "eslint.*"
+  - "eslint.config.*"
+  - "tsconfig*.json"
+  - "scripts/**"
+
+"area:ci":
+  - ".github/workflows/**"
+  - ".github/codeql/**"
+
+# ── Docs / Tests / Perf / Security / Deps ───────────────────────────────────
+"docs":
+  - "README.md"
+  - "docs/**"
+
+"tests":
+  - "tests/**"
+  - "playwright.config.*"
+  - "vitest.*"
+
+"perf":
+  - "lighthouse-budgets.json"
+  - "app/instrumentation.ts"
+
+"security":
+  - ".github/codeql/**"
+  - ".github/dependabot.yml"
+
+"deps":
+  - "package.json"
+  - "package-lock.json"
+
+# ── SPEC tracks (helpful for dashboards) ────────────────────────────────────
+"spec:001":
+  - "lighthouse-budgets.json"
+  - ".github/workflows/**"
+  - "scripts/feature-ready.mjs"
+  - "scripts/audit-exports.js"
+
+# Multi-label examples using changed-files advanced matching
+"kind:feature":
+  changed-files:
+    any-glob-to-any-file:
+      - "src/app/**/page.tsx"
+      - "src/app/api/**/route.ts"
+
+"kind:chore":
+  - "**/*.md"
+  - "**/.editorconfig"
+  - "**/.prettierrc*"

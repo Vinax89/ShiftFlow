@@ -22,6 +22,11 @@ async function main(){
   for (const e of envs) {
     await adminDb.doc(`tenants/${tId}/budget_plans/${planId}/envelopes/${e.id}`).set(e)
   }
+
+  const acctId = 'acct-seed'
+  await adminDb.doc(`tenants/${tId}/accounts/${acctId}`).set({
+    type: 'checking', name: 'Main Checking', mask: '1234', createdAt: Date.now(), updatedAt: Date.now()
+  }, { merge: true })
 }
 
 main().catch(e=>{ console.error(e); process.exit(1) })

@@ -42,11 +42,15 @@ export async function POST(req: NextRequest) {
       return periodKeyFor(ymd, plan.periodConfig, plan.tz)
     })()
 
-    const txCol = adminDb.collection(`tenants/${tenantId}/transactions`)
-    const txSn = await txCol.get()
+    const [txSn, idxSn] = await Promise.all([
+      adminDb.collection(`tenants/${tenantId}/transactions`).get(),
+      adminDb.collection(`tenants/${tenantId}/budget_tx_index`).get(),
+    ])
+    const idx = new Map(idxSn.docs.map(d => [d.id, d.data() as any]))
     const txns: Txn[] = txSn.docs.map(d => {
       const x = d.data() as any
-      return { id: d.id, date: new Date(x.date).toISOString().slice(0,10), amountCents: x.amountCents, splits: [] }
+      const splits = (idx.get(d.id)?.splits || []) as Array<{envId:string, amountCents:number}>
+      return { id: d.id, date: new Date(x.date).toISOString().slice(0,10), amountCents: x.amountCents, splits }
     })
 
     const prevSnap = await adminDb.doc(`tenants/${tenantId}/budget_plans/${planId}/periods/${prevKey}`).get()

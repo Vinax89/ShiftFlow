@@ -2,15 +2,23 @@ import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { adminAuth, adminDb } from '@/lib/admin'
 
-const CreateTxn = z.object({ tenantId: z.string(), accountId: z.string(), amountCents: z.number().int(), date: z.string().datetime(), merchant: z.string().optional(), memo: z.string().optional(), categoryId: z.string().nullable().optional(), status: z.enum(['posted','pending']).default('posted'), source: z.enum(['manual','csv','api']).default('manual'), hash: z.string() })
+const Body = z.object({
+  tenantId: z.string(),
+  accountId: z.string().default('acct-seed'),
+  amountCents: z.number().int(),
+  currency: z.string().default('USD'),
+  dateISO: z.string(),
+  merchant: z.string().default('Unknown'),
+  memo: z.string().optional(),
+  splits: z.array(z.object({ envId: z.string(), amountCents: z.number().int() })).optional()
+})
 
 async function getUid(req: NextRequest): Promise<string|null> {
   const bypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1' && req.headers.get('x-dev-auth-uid')
   if (bypass) return String(bypass)
   const authz = req.headers.get('authorization') || ''
   if (!authz.startsWith('Bearer ')) return null
-  const token = authz.slice(7)
-  try { const d = await adminAuth.verifyIdToken(token); return d.uid } catch { return null }
+  try { const d = await adminAuth.verifyIdToken(authz.slice(7)); return d.uid } catch { return null }
 }
 
 export async function GET(req: NextRequest) {
@@ -29,7 +37,18 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const uid = await getUid(req)
   if (!uid) return new Response('Unauthorized', { status: 401 })
-  const body = CreateTxn.parse(await req.json())
-  await adminDb.collection(`tenants/${body.tenantId}/transactions`).add({ ...body, currency: 'USD', date: Date.parse(body.date) })
-  return new Response(null, { status: 201 })
+  const { tenantId, accountId, amountCents, currency, dateISO, merchant, memo, splits } = Body.parse(await req.json())
+
+  const txRef = await adminDb.collection(`tenants/${tenantId}/transactions`).add({
+    accountId, amountCents, currency, date: new Date(dateISO).getTime(), merchant, memo: memo || '', status: 'posted', source: 'manual', createdAt: Date.now()
+  })
+  if (splits && splits.length) {
+    await adminDb.doc(`tenants/${tenantId}/budget_tx_index/${txRef.id}`).set({ splits, source: 'manual', updatedAt: Date.now() })
+  }
+  // Kick a recompute for the transaction date (assumes planId 'baseline' for MVP)
+  const headers: HeadersInit = { 'content-type': 'application/json' }
+  if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1') headers['x-dev-auth-uid'] = 'dev-user'
+  const url = new URL('/api/budget/recompute', req.nextUrl.origin)
+  await fetch(url, { method: 'POST', headers, body: JSON.stringify({ tenantId, planId: 'baseline', dates: [dateISO] }) })
+  return Response.json({ ok: true, txId: txRef.id })
 }

@@ -35,6 +35,25 @@ Then, run the seed script:
 npm run seed:dev
 ```
 
+### API Smoke Tests
+
+You can use `curl` to quickly check that the basic APIs are responding. The port may vary depending on how you're running the app (e.g., `serve:prod` vs `serve:prod:auto`).
+
+```bash
+# Health
+curl -i http://localhost:9000/api/healthz
+
+# Budget bootstrap (creates baseline plan/envelopes on first run)
+curl -i -H 'x-dev-auth-uid: dev-user' -H 'content-type: application/json' \
+  -d '{"tenantId":"dev","dates":["'"$(date +%F)"'"]}' \
+  http://localhost:9000/api/budget/recompute
+
+# Read current period (first ~40 lines)
+curl -sS -H 'x-dev-auth-uid: dev-user' \
+  "http://localhost:9000/api/budget/read?tenantId=dev" | head -n 40
+```
+
+
 ### Known ESLint Warnings
 
 The following ESLint warnings are known and can be safely ignored for now:

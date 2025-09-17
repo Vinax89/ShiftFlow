@@ -56,19 +56,23 @@ curl -sS -H 'x-dev-auth-uid: dev-user' \
 ### E2E and Runbook for Categorizer Tools
 
 ```bash
-# Build + auto-pick free port
+# Build & auto-pick a port
 npm run serve:prod:auto
-# Output shows: [auto-port] Starting next start -p <PORT>
-# Note the port for the following commands
+# Note the printed port, then:
 PORT=<PORT>
 
-# Open UI in your browser
+# Open Categorizer settings; run Dry run and Apply
 xdg-open http://localhost:$PORT/settings/categorizer || open http://localhost:$PORT/settings/categorizer
 
-# Test Apply Now API
+# API: dry run
 curl -sS -H 'x-dev-auth-uid: dev-user' -H 'content-type: application/json' \
-  -d '{"tenantId":"dev","days":7}' \
-  http://localhost:$PORT/api/categorizer/apply | jq
+  -d '{"tenantId":"dev","days":7,"dryRun":true}' \
+  http://localhost:$PORT/api/categorizer/apply | jq '.updated, .dates, .preview[0]'
+
+# Apply for real
+curl -sS -H 'x-dev-auth-uid: dev-user' -H 'content-type: application/json' \
+  -d '{"tenantId":"dev","days":7,"dryRun":false}' \
+  http://localhost:$PORT/api/categorizer/apply | jq '.updated, .recomputed'
 
 # Run E2E tests
 npx playwright install --with-deps

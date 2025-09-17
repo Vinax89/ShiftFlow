@@ -87,6 +87,11 @@ curl -sS -H 'x-dev-auth-uid: dev-user' -H 'content-type: application/json' \
        "onlyTxIds":["<txid1>","<txid2>","<txid3>"]}' \
   http://localhost:$PORT/api/categorizer/apply | jq '.updated, .recomputed'
 
+# API: simulate a pattern and 100% to misc
+curl -sS -H 'x-dev-auth-uid: dev-user' -H 'content-type: application/json' \
+  -d '{"tenantId":"dev","merchantPattern":".*","splits":[{"envId":"misc","pct":100}],"limit":10}' \
+  http://localhost:$PORT/api/categorizer/rules/simulate | jq '.hits, .sample | length'
+
 # E2E tests
 npx playwright install --with-deps
 BASE_URL=http://localhost:$PORT npx playwright test tests/e2e/categorizer-apply.spec.ts

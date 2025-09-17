@@ -30,14 +30,18 @@ export async function POST(req: NextRequest){
       acc += a
       return { envId: s.envId, pct: s.pct, amountCents: a }
     })
-    if (sample.length < 20) sample.push({
-      txId: d.id,
-      date: new Date(t.date?.seconds ? t.date.seconds*1000 : t.date || Date.now()).toISOString().slice(0,10),
-      merchant: m,
-      amountCents: amount,
-      splits: applied,
-      why: { regex: merchantPattern, flags: 'i', groups: [] },
-    })
+    if (sample.length < 20) {
+      const dt = new Date(t.date?.seconds ? t.date.seconds*1000 : t.date || Date.now());
+      const dateStr = isNaN(dt.valueOf()) ? new Date().toISOString().slice(0, 10) : dt.toISOString().slice(0, 10);
+      sample.push({
+        txId: d.id,
+        date: dateStr,
+        merchant: m,
+        amountCents: amount,
+        splits: applied,
+        why: { regex: merchantPattern, flags: 'i', groups: [] },
+      });
+    }
   }
   return Response.json({ hits, sample })
 }

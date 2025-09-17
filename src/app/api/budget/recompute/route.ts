@@ -6,7 +6,7 @@ import { periodKeyFor } from '@/lib/budget/keys'
 import { computePeriod } from '@/lib/budget/compute'
 import type { PlanDoc, EnvelopeDoc, PeriodDoc, Txn } from '@/lib/budget/types'
 
-const Body = z.object({ tenantId: z.string(), planId: z.string(), dates: z.array(z.string()).min(1) })
+const Body = z.object({ tenantId: z.string(), planId: z.string().optional(), dates: z.array(z.string()).min(1) })
 
 async function getUid(req: NextRequest): Promise<string|null> {
   const bypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1' && req.headers.get('x-dev-auth-uid')
@@ -19,7 +19,12 @@ async function getUid(req: NextRequest): Promise<string|null> {
 export async function POST(req: NextRequest) {
   const uid = await getUid(req)
   if (!uid) return new Response('Unauthorized', { status: 401 })
-  const { tenantId, planId, dates } = Body.parse(await req.json())
+  const { tenantId, planId: planIdBody, dates } = Body.parse(await req.json())
+  let planId = planIdBody
+  if (!planId) {
+    const tSnap = await adminDb.doc(`tenants/${tenantId}`).get()
+    planId = (tSnap.data() as any)?.activePlanId || 'baseline'
+  }
 
   // Load plan
   const planSnap = await adminDb.doc(`tenants/${tenantId}/budget_plans/${planId}`).get()

@@ -1,33 +1,27 @@
 "use client"
+import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { useToast } from '@/hooks/use-toast'
 
-export function AdjustButtons({ tenantId, planId, periodKey, envId }: { tenantId: string, planId: string, periodKey: string, envId: string }) {
-  const [amount, setAmount] = useState(10)
-  const router = useRouter()
-  const { toast } = useToast()
+type Props = { tenantId: string; planId?: string; periodKey: string; envId: string }
 
-  async function adjust(deltaCents: number) {
-    const headers: HeadersInit = { 'content-type': 'application/json' }
-    if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1') headers['x-dev-auth-uid'] = 'dev-user'
-    const body = { tenantId, planId, periodKey, envId, deltaCents }
-    const r = await fetch('/api/budget/assign', { method: 'POST', headers, body: JSON.stringify(body) })
-    if (!r.ok) {
-      const errorText = await r.text()
-      toast({ variant: 'destructive', title: 'Adjustment failed', description: errorText })
-      return
-    }
-    router.refresh()
+export function AdjustButtons({ tenantId, planId, periodKey, envId }: Props){
+  const [pending, start] = useTransition()
+  const r = useRouter()
+  const dev = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1'
+
+  async function send(delta: number){
+    const headers: HeadersInit = { 'content-type':'application/json' }
+    if (dev) headers['x-dev-auth-uid'] = 'dev-user'
+    await fetch('/api/budget/assign', { method: 'POST', headers, body: JSON.stringify({ tenantId, planId: planId || 'baseline', periodKey, envId, deltaCents: delta }) })
+    start(() => {
+      r.refresh()
+    })
   }
 
   return (
-    <div className="flex items-center gap-1">
-      <Button size="sm" variant="outline" onClick={() => adjust(amount * -100)}>-</Button>
-      <Input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-16 h-8 text-center" />
-      <Button size="sm" variant="outline" onClick={() => adjust(amount * 100)}>+</Button>
+    <div className="flex items-center gap-2">
+      <button disabled={pending} onClick={() => send(-500)} className="px-2 py-1 rounded border">−$5</button>
+      <button disabled={pending} onClick={() => send(500)} className="px-2 py-1 rounded border">+$5</button>
     </div>
   )
 }

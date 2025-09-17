@@ -49,6 +49,6 @@ export async function POST(req: NextRequest) {
   const headers: HeadersInit = { 'content-type': 'application/json' }
   if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1') headers['x-dev-auth-uid'] = 'dev-user'
   const url = new URL('/api/budget/recompute', req.nextUrl.origin)
-  await fetch(url, { method: 'POST', headers, body: JSON.stringify({ tenantId, planId: 'baseline', dates: [dateISO] }) })
+  await fetch(url, { method: 'POST', headers, body: JSON.stringify({ tenantId, dates: [dateISO] }) })
   return Response.json({ ok: true, txId: txRef.id })
 }

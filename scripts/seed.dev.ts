@@ -3,7 +3,7 @@ import { adminDb } from '../src/lib/admin'
 async function main(){
   const uid = process.env.SEED_UID || 'dev-user'
   const tId = process.env.SEED_TENANT || 'dev'
-  await adminDb.doc(`tenants/${tId}`).set({ name: 'Dev Tenant', createdAt: Date.now(), ownerUid: uid, currency: 'USD', tz: 'America/Los_Angeles' }, { merge: true })
+  await adminDb.doc(`tenants/${tId}`).set({ name: 'Dev Tenant', createdAt: Date.now(), ownerUid: uid, currency: 'USD', tz: 'America/Los_Angeles', activePlanId: 'baseline' }, { merge: true })
   await adminDb.doc(`users/${uid}`).set({ displayName: 'Dev', email: 'dev@example.com', tz: 'America/Los_Angeles', tenants: { [tId]: 'owner' } }, { merge: true })
 
   const planId = 'baseline'

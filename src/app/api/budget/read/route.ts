@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { adminAuth, adminDb } from '@/lib/admin'
 import { periodKeyFor } from '@/lib/budget/keys'
 
-const Q = z.object({ tenantId: z.string(), planId: z.string(), date: z.string().optional() })
+const Q = z.object({ tenantId: z.string(), planId: z.string().optional(), date: z.string().optional() })
 
 async function getUid(req: NextRequest): Promise<string|null> {
   const bypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1' && req.headers.get('x-dev-auth-uid')
@@ -17,7 +17,12 @@ export async function GET(req: NextRequest) {
   const uid = await getUid(req)
   if (!uid) return new Response('Unauthorized', { status: 401 })
   const url = new URL(req.url)
-  const { tenantId, planId, date } = Q.parse({ tenantId: url.searchParams.get('tenantId'), planId: url.searchParams.get('planId'), date: url.searchParams.get('date') ?? undefined })
+  const { tenantId, planId: planIdQ, date } = Q.parse({ tenantId: url.searchParams.get('tenantId'), planId: url.searchParams.get('planId') ?? undefined, date: url.searchParams.get('date') ?? undefined })
+  let planId = planIdQ
+  if (!planId) {
+    const tSnap = await adminDb.doc(`tenants/${tenantId}`).get()
+    planId = (tSnap.data() as any)?.activePlanId || 'baseline'
+  }
   const planSnap = await adminDb.doc(`tenants/${tenantId}/budget_plans/${planId}`).get()
   if (!planSnap.exists) return new Response('plan not found', { status: 404 })
   const plan = planSnap.data() as any

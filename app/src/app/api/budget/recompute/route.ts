@@ -1,4 +1,3 @@
-
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { adminAuth, adminDb } from '@/lib/admin'

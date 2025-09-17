@@ -1,0 +1,78 @@
+name: "SAST (Bearer)"
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "28 3 * * 0"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  pr-diff:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bearer (diff, fail on high+)
+        id: bearer
+        uses: bearer/bearer-action@v2
+        with:
+          diff: true
+          severity: critical,high
+          format: sarif
+          output: results.sarif
+          exit-code: 1
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+  push-full:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bearer (full repo, fail on high+)
+        id: bearer
+        uses: bearer/bearer-action@v2
+        with:
+          severity: critical,high
+          format: sarif
+          output: results.sarif
+          exit-code: 1
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+  scheduled:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bearer (weekly full repo, non-blocking)
+        id: bearer
+        uses: bearer/bearer-action@v2
+        with:
+          severity: critical,high,medium
+          format: sarif
+          output: results.sarif
+          exit-code: 0
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif

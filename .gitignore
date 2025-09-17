@@ -48,3 +48,19 @@ firestore-debug.log
 dist/
 coverage/
 *.log
+
+# build / caches / tooling
+node_modules/
+.next/
+dist/
+coverage/
+playwright-report/
+test-results/
+playwright/.cache/
+engine/target/
+engine/pkg/
+.vscode/
+.tmp/
+.cache/
+.vercel/
+.firebase/

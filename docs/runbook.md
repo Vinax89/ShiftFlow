@@ -53,6 +53,27 @@ curl -sS -H 'x-dev-auth-uid: dev-user' \
   "http://localhost:9000/api/budget/read?tenantId=dev" | head -n 40
 ```
 
+### E2E and Runbook for Categorizer Tools
+
+```bash
+# Build + auto-pick free port
+npm run serve:prod:auto
+# Output shows: [auto-port] Starting next start -p <PORT>
+# Note the port for the following commands
+PORT=<PORT>
+
+# Open UI in your browser
+xdg-open http://localhost:$PORT/settings/categorizer || open http://localhost:$PORT/settings/categorizer
+
+# Test Apply Now API
+curl -sS -H 'x-dev-auth-uid: dev-user' -H 'content-type: application/json' \
+  -d '{"tenantId":"dev","days":7}' \
+  http://localhost:$PORT/api/categorizer/apply | jq
+
+# Run E2E tests
+npx playwright install --with-deps
+BASE_URL=http://localhost:$PORT npx playwright test tests/e2e/categorizer-apply.spec.ts
+```
 
 ### Known ESLint Warnings
 

@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
         const splits = (idx.get(x.id)?.splits || []) as Array<{envId:string, amountCents:number}>
         return {
           id: x.id,
-          date: isNaN(+dt) ? '1970-01-01' : dt.toISOString().slice(0,10),
+          date: isNaN(dt.valueOf()) ? '1970-01-01' : dt.toISOString().slice(0,10),
           amountCents: x.amountCents ?? 0,
           splits
         }

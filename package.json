@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "serve:prod": "NODE_ENV=production next build && NODE_ENV=production next start -p ${PORT:-9000}",
+    "serve:prod:auto": "NODE_ENV=production next build && node scripts/start-auto-port.mjs",
+    "start:auto": "node scripts/start-auto-port.mjs",
     "seed:dev": "tsx scripts/seed.dev.ts",
     "kill:9010": "kill-port 9010",
     "start:9010": "NODE_ENV=production next start -p 9010"

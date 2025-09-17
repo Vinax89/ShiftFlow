@@ -15,6 +15,8 @@ export function RuleEditor({ initial }: { initial: any[] }){
   const [busy, setBusy] = useState<'idle'|'scanning'|'recomputing'|'done'>('idle')
   const [preview, setPreview] = useState<any[]|null>(null)
   const { toast } = useToast()
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [merchantKeep, setMerchantKeep] = useState<Record<string, boolean>>({})
 
   async function refresh(){
     const resp = await fetch(`/api/categorizer/rules?tenantId=dev`, { headers: dev ? { 'x-dev-auth-uid': 'dev-user' } : undefined, cache: 'no-store' })
@@ -70,7 +72,16 @@ export function RuleEditor({ initial }: { initial: any[] }){
       return
     }
     if (dryRun) {
-      setPreview(body.preview || [])
+      const pv = (body.preview || []) as any[]
+      setPreview(pv)
+      // default: keep all
+      setSelectedIds(new Set(pv.map(p=>p.txId)))
+      // compute merchant chips
+      const uniq: Record<string, number> = {}
+      for (const p of pv){ uniq[p.merchant] = (uniq[p.merchant]||0)+1 }
+      const mk: Record<string, boolean> = {}
+      Object.keys(uniq).forEach(m=> mk[m] = true)
+      setMerchantKeep(mk)
       setBusy('done')
       toast({ title: 'Dry run complete', description: `Would update ${body.updated} txns across ${body.dates?.length||0} dates` })
     } else {
@@ -79,6 +90,45 @@ export function RuleEditor({ initial }: { initial: any[] }){
       setBusy('done')
       toast({ title: 'Apply complete', description: `Updated ${body.updated} txns; recomputed ${body.recomputed} periods` })
     }
+  }
+
+  function toggleRow(id: string){
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  function setAllRows(on: boolean){
+    if (!preview) return
+    setSelectedIds(new Set(on ? preview.map(p=>p.txId) : []))
+    setMerchantKeep(Object.fromEntries(Object.keys(merchantKeep).map(m=>[m,on])))
+  }
+
+  function toggleMerchant(m: string){
+    setMerchantKeep(prev => {
+      const next = { ...prev, [m]: !prev[m] }
+      // sync row selection for this merchant
+      if (preview){
+        const ids = new Set(selectedIds)
+        for (const p of preview) if (p.merchant === m) { next[m] ? ids.add(p.txId) : ids.delete(p.txId) }
+        setSelectedIds(ids)
+      }
+      return next
+    })
+  }
+
+  async function applySelected(){
+    if (!preview) return
+    const ids = Array.from(selectedIds)
+    if (!ids.length) { toast({ title: 'Nothing selected', description: 'Choose at least one transaction' }); return }
+    setBusy('recomputing')
+    const headers: HeadersInit = { 'content-type': 'application/json' }
+    if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
+    const res = await fetch(`/api/categorizer/apply`, { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', dryRun: false, onlyTxIds: ids }) })
+    const body = await (res.ok ? res.json() : res.text())
+    setBusy('done')
+    if (!res.ok) { toast({ variant: 'destructive', title: 'Apply failed', description: String(body).slice(0,300) }); return }
+    toast({ title: 'Applied selected', description: `Updated ${body.updated} txns; recomputed ${body.recomputed} periods` })
+    // clear preview after apply
+    setPreview(null); setSelectedIds(new Set()); setMerchantKeep({})
   }
 
   return (
@@ -158,6 +208,27 @@ export function RuleEditor({ initial }: { initial: any[] }){
             </div>
           )}
 
+          {/* Merchant chips */}
+          {dryRun && preview && (
+            <div className="mt-4">
+              <div className="text-sm font-medium mb-1">Filter by merchant</div>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {Object.keys(merchantKeep).sort().map(m => (
+                  <button key={m} onClick={()=>toggleMerchant(m)}
+                          className={`px-2 py-1 rounded-full border text-xs ${merchantKeep[m]?'bg-green-50 border-green-300':'bg-gray-50 border-gray-300 text-gray-500'}`}
+                          title={m}>
+                    {merchantKeep[m]?'Keep':'Skip'} · {m}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 mb-2 text-xs">
+                <button className="px-2 py-1 border rounded" onClick={()=>setAllRows(true)}>Keep all</button>
+                <button className="px-2 py-1 border rounded" onClick={()=>setAllRows(false)}>Skip all</button>
+                <span className="text-gray-500">Selected {selectedIds.size} of {preview.length}</span>
+              </div>
+            </div>
+          )}
+
           {/* Dry run preview */}
           {dryRun && preview && (
             <div className="mt-4">
@@ -165,10 +236,13 @@ export function RuleEditor({ initial }: { initial: any[] }){
               <div className="text-xs text-gray-500 mb-2">Showing up to {preview.length} matches</div>
               <div className="max-h-48 overflow-auto border rounded">
                 <table className="w-full text-xs">
-                  <thead className="bg-gray-50"><tr><th className="px-2 py-1 text-left">Date</th><th className="px-2 py-1 text-left">Merchant</th><th className="px-2 py-1 text-right">Amount</th><th className="px-2 py-1">Splits</th></tr></thead>
+                  <thead className="bg-gray-50"><tr><th className="px-2 py-1"></th><th className="px-2 py-1 text-left">Date</th><th className="px-2 py-1 text-left">Merchant</th><th className="px-2 py-1 text-right">Amount</th><th className="px-2 py-1">Splits</th></tr></thead>
                   <tbody>
                     {preview.map((p)=> (
                       <tr key={p.txId} className="border-t">
+                        <td className="px-2 py-1 text-center">
+                          <input type="checkbox" checked={selectedIds.has(p.txId)} onChange={()=>toggleRow(p.txId)} />
+                        </td>
                         <td className="px-2 py-1 whitespace-nowrap">{p.date}</td>
                         <td className="px-2 py-1 truncate max-w-[12rem]" title={p.merchant}>{p.merchant}</td>
                         <td className="px-2 py-1 text-right">{(p.amountCents/100).toFixed(2)}</td>
@@ -181,9 +255,10 @@ export function RuleEditor({ initial }: { initial: any[] }){
                   </tbody>
                 </table>
               </div>
-              {preview.length > 0 && <div className="mt-2">
-                <button onClick={async()=>{ setDryRun(false); await applyNow(); setDryRun(true) }} className="px-3 py-1 rounded border">Apply these now</button>
-              </div>}
+              <div className="mt-2 flex items-center gap-2">
+                <button onClick={applySelected} className="px-3 py-1 rounded border">Apply selected now</button>
+                <button onClick={async()=>{ setDryRun(false); await applyNow(); setDryRun(true) }} className="px-3 py-1 rounded border">Apply all shown</button>
+              </div>
             </div>
           )}
         </div>

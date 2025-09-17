@@ -74,7 +74,7 @@ curl -sS -H 'x-dev-auth-uid: dev-user' -H 'content-type: application/json' \
   -d '{"tenantId":"dev","days":7,"dryRun":false}' \
   http://localhost:$PORT/api/categorizer/apply | jq '.updated, .recomputed'
 
-# Run E2E tests
+# E2E tests
 npx playwright install --with-deps
 BASE_URL=http://localhost:$PORT npx playwright test tests/e2e/categorizer-apply.spec.ts
 ```
@@ -84,3 +84,4 @@ BASE_URL=http://localhost:$PORT npx playwright test tests/e2e/categorizer-apply.
 The following ESLint warnings are known and can be safely ignored for now:
 
 - **import-order**: The CI step for linting (`lint:strict`) is allowed to fail if only import-order warnings are present. This will be addressed in a future specification.
+

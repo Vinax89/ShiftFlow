@@ -7,8 +7,6 @@ const Body = z.object({
   tenantId: z.string().default('dev'),
   days: z.number().int().min(1).max(90).default(30),
   merchantPattern: z.string().optional(), // if set, filter rules to this single regex id or pattern
-  dryRun: z.boolean().optional().default(false),
-  previewLimit: z.number().int().min(1).max(200).default(50),
 })
 
 function devUid(req: NextRequest){
@@ -49,7 +47,7 @@ function inferSplits(rules: Array<{merchantPattern:string, envId:string, pct?:nu
 export async function POST(req: NextRequest){
   const uid = await requireUid(req)
   if (!uid) return new Response('unauthorized', { status: 401 })
-  const { tenantId, days, merchantPattern, dryRun, previewLimit } = Body.parse(await req.json())
+  const { tenantId, days, merchantPattern } = Body.parse(await req.json())
 
   const since = Date.now() - days*24*60*60*1000
   let rules = await loadRules(tenantId)
@@ -63,7 +61,6 @@ export async function POST(req: NextRequest){
   const batch = adminDb.batch()
   const dates = new Set<string>()
   let updated = 0
-  const preview: Array<{ txId:string, date:string, merchant:string, amountCents:number, splits:Array<{envId:string,amountCents:number}> }>=[]
 
   for (const d of txSnap.docs){
     const tx: any = d.data()
@@ -76,41 +73,23 @@ export async function POST(req: NextRequest){
     const idxRef = adminDb.doc(`tenants/${tenantId}/budget_tx_index/${d.id}`)
     const idx = await idxRef.get()
     if (idx.exists) continue // do not clobber manual/rule choices
-    
-    // derive YYYY-MM-DD for recompute date bucket
-    const toISO = (v: any) => {
-      // Accept Firestore Timestamp, millis, or ISO string
-      if (v?.toDate) return v.toDate() as Date
-      if (typeof v === 'number') return new Date(v)
-      if (typeof v === 'string') return new Date(v)
-      return new Date(NaN)
-    }
-    const dt = toISO(tx.date)
-    const ymd = !isNaN(dt.valueOf()) ? dt.toISOString().slice(0,10) : new Date().toISOString().slice(0,10)
-    dates.add(ymd)
-    
-    if (dryRun) {
-      if (preview.length < previewLimit) preview.push({
-        txId: d.id,
-        date: ymd,
-        merchant,
-        amountCents: amount,
-        splits,
-      })
-    } else {
-      batch.set(idxRef, { splits, source: 'apply_now', updatedAt: Date.now() }, { merge: true })
-    }
+
+    batch.set(idxRef, { splits, source: 'apply_now', updatedAt: Date.now() }, { merge: true })
     updated++
+    // derive YYYY-MM-DD for recompute date bucket
+    const dt = tx.date && tx.date.toDate ? tx.date.toDate() : (typeof tx.date==='number' ? new Date(tx.date) : new Date())
+    const ymd = isNaN(+dt) ? new Date().toISOString().slice(0,10) : dt.toISOString().slice(0,10)
+    dates.add(ymd)
   }
 
-  if (updated && !dryRun) await batch.commit()
+  if (updated) await batch.commit()
 
   // coalesced recompute via same-host call (API already has a lock)
   const proto = process.env.INTERNAL_PROTO || 'http'
   const host = process.env.INTERNAL_HOST || 'localhost:9010'
   const origin = `${proto}://${host}`
   let recomputed = 0
-  if (updated && !dryRun) {
+  if (updated) {
     const resp = await fetch(`${origin}/api/budget/recompute`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-auth-uid': 'dev-user' },
       body: JSON.stringify({ tenantId, dates: Array.from(dates) })
@@ -118,5 +97,5 @@ export async function POST(req: NextRequest){
     if (resp.ok) recomputed = (await resp.json()).results?.length ?? 0
   }
 
-  return Response.json({ updated, recomputed, dates: Array.from(dates).sort(), dryRun, preview })
+  return Response.json({ updated, recomputed, dates: Array.from(dates).sort() })
 }

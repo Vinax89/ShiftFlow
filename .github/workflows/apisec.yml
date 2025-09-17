@@ -45,7 +45,7 @@ jobs:
 
       - name: APIsec scan (real)
         if: steps.gate.outputs.run_real == 'true'
-        uses: apisec-inc/apisec-run-scan@025432089674a28ba8fb55f8ab06c10215e772ea
+        uses: apisec-inc/apisec-run-scan@8f66ce948afb779712a1d57ecb0a528d7ded5a45
         with:
           apisec-username: ${{ secrets.APISEC_USERNAME }}
           apisec-password: ${{ secrets.APISEC_PASSWORD }}

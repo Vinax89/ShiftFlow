@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
     if (!u.exists || !(u.get('tenants')||{})[tenantId]) return new Response('Forbidden', { status: 403 })
   }
   const snap = await adminDb.collection(`tenants/${tenantId}/accounts`).orderBy('createdAt','desc').get()
-  return Response.json(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return Response.json({ items });
 }
 
 export async function POST(req: NextRequest) {

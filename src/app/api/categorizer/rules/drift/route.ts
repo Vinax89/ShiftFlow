@@ -54,3 +54,8 @@ export async function POST(req: NextRequest){
 
   return Response.json({ ok:true, matched, applied, overrides, accuracy, status, tip, samples })
 }
+
+export async function GET() { return new Response('Method Not Allowed', { status: 405 }) }
+export async function PUT() { return new Response('Method Not Allowed', { status: 405 }) }
+export async function DELETE() { return new Response('Method Not Allowed', { status: 405 }) }
+export async function PATCH() { return new Response('Method Not Allowed', { status: 405 }) }

@@ -116,3 +116,8 @@ export async function POST(req: NextRequest){
   }
   return Response.json({ ok:true, rule, count: applied.length, ledgerId, dates: Array.from(new Set(applied.map(a=>a.dateISO))), scope: { since, until, accountId } })
 }
+
+export async function GET() { return new Response('Method Not Allowed', { status: 405 }) }
+export async function PUT() { return new Response('Method Not Allowed', { status: 405 }) }
+export async function DELETE() { return new Response('Method Not Allowed', { status: 405 }) }
+export async function PATCH() { return new Response('Method Not Allowed', { status: 405 }) }

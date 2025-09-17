@@ -17,6 +17,10 @@ export function RuleEditor({ initial }: { initial: any[] }){
   const { toast } = useToast()
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [merchantKeep, setMerchantKeep] = useState<Record<string, boolean>>({})
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createMerchant, setCreateMerchant] = useState<string>('')
+  const [envOptions, setEnvOptions] = useState<Array<{id:string;name:string}>>([])
+  const [envId, setEnvId] = useState('')
 
   async function refresh(){
     const resp = await fetch(`/api/categorizer/rules?tenantId=dev`, { headers: dev ? { 'x-dev-auth-uid': 'dev-user' } : undefined, cache: 'no-store' })
@@ -131,6 +135,30 @@ export function RuleEditor({ initial }: { initial: any[] }){
     setPreview(null); setSelectedIds(new Set()); setMerchantKeep({})
   }
 
+  async function openCreateFor(merchant: string){
+    setCreateMerchant(merchant)
+    setCreateOpen(true)
+    try {
+      const headers: HeadersInit = {}
+      if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
+      const r = await fetch(`/api/budget/envelopes?tenantId=dev`, { headers })
+      const j = await r.json().catch(()=>({ envelopes: [] }))
+      setEnvOptions(j.envelopes || [])
+      setEnvId(j.envelopes?.[0]?.id || 'misc')
+    } catch { setEnvOptions([]); setEnvId('misc') }
+  }
+
+  async function createRule(){
+    const headers: HeadersInit = { 'content-type': 'application/json' }
+    if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
+    const res = await fetch(`/api/categorizer/rules?tenantId=dev`, { method:'POST', headers, body: JSON.stringify({ tenantId: 'dev', merchantPattern: createMerchant, envId }) })
+    const body = await (res.ok ? res.json() : res.text())
+    if (!res.ok) { toast({ title:'Create rule failed', description: String(body).slice(0,300) }); return }
+    toast({ title:'Rule created', description: `${createMerchant} → ${envId}` })
+    setCreateOpen(false)
+    await refresh()
+  }
+
   return (
     <div className="space-y-6">
       <form onSubmit={e=>start(()=>addOrSave(e))} className="flex flex-wrap gap-2 items-end">
@@ -213,13 +241,20 @@ export function RuleEditor({ initial }: { initial: any[] }){
             <div className="mt-4">
               <div className="text-sm font-medium mb-1">Filter by merchant</div>
               <div className="flex flex-wrap gap-2 mb-2">
-                {Object.keys(merchantKeep).sort().map(m => (
-                  <button key={m} onClick={()=>toggleMerchant(m)}
+                {Object.keys(merchantKeep).sort().map(m => {
+                  const isUnknown = preview?.some(p=>p.merchant===m && p.matchReason?.type==='none')
+                  return (
+                  <div key={m} className="flex items-center gap-2">
+                    <button onClick={()=>toggleMerchant(m)}
                           className={`px-2 py-1 rounded-full border text-xs ${merchantKeep[m]?'bg-green-50 border-green-300':'bg-gray-50 border-gray-300 text-gray-500'}`}
                           title={m}>
-                    {merchantKeep[m]?'Keep':'Skip'} · {m}
-                  </button>
-                ))}
+                      {merchantKeep[m]?'Keep':'Skip'} · {m}
+                    </button>
+                    {isUnknown && (
+                      <button onClick={()=>openCreateFor(m)} className="text-xs underline text-blue-600">Create rule</button>
+                    )}
+                  </div>)
+                })}
               </div>
               <div className="flex items-center gap-2 mb-2 text-xs">
                 <button className="px-2 py-1 border rounded" onClick={()=>setAllRows(true)}>Keep all</button>
@@ -236,7 +271,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
               <div className="text-xs text-gray-500 mb-2">Showing up to {preview.length} matches</div>
               <div className="max-h-48 overflow-auto border rounded">
                 <table className="w-full text-xs">
-                  <thead className="bg-gray-50"><tr><th className="px-2 py-1"></th><th className="px-2 py-1 text-left">Date</th><th className="px-2 py-1 text-left">Merchant</th><th className="px-2 py-1 text-right">Amount</th><th className="px-2 py-1">Splits</th></tr></thead>
+                  <thead className="bg-gray-50"><tr><th className="px-2 py-1"></th><th className="px-2 py-1 text-left">Date</th><th className="px-2 py-1 text-left">Merchant</th><th className="px-2 py-1 text-right">Amount</th><th className="px-2 py-1">Splits</th><th className="px-2 py-1">Reason</th></tr></thead>
                   <tbody>
                     {preview.map((p)=> (
                       <tr key={p.txId} className="border-t">
@@ -248,6 +283,9 @@ export function RuleEditor({ initial }: { initial: any[] }){
                         <td className="px-2 py-1 text-right">{(p.amountCents/100).toFixed(2)}</td>
                         <td className="px-2 py-1">
                           {(p.splits||[]).map((s:any)=>`${s.envId}:${(s.amountCents/100).toFixed(2)}`).join(', ')}
+                        </td>
+                        <td className="px-2 py-1 text-xs text-gray-600">
+                          {p.matchReason?.type==='rule' ? `rule:${p.matchReason.ruleId}` : '—'}
                         </td>
                       </tr>
                     ))}
@@ -263,6 +301,28 @@ export function RuleEditor({ initial }: { initial: any[] }){
           )}
         </div>
       </div>
+      {/* Create Rule modal */}
+      {createOpen && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white p-4 rounded-xl w-[420px] shadow-xl">
+            <div className="text-sm font-medium mb-2">Create rule</div>
+            <div className="text-xs text-gray-500 mb-3">Merchant pattern</div>
+            <input className="w-full border rounded px-2 py-1 mb-3" value={createMerchant} onChange={e=>setCreateMerchant(e.target.value)} />
+            <div className="text-xs text-gray-500 mb-1">Envelope</div>
+            {envOptions.length ? (
+              <select className="w-full border rounded px-2 py-1 mb-4" value={envId} onChange={e=>setEnvId(e.target.value)}>
+                {envOptions.map(o=> <option key={o.id} value={o.id}>{o.name} ({o.id})</option>)}
+              </select>
+            ) : (
+              <input className="w-full border rounded px-2 py-1 mb-4" value={envId} onChange={e=>setEnvId(e.target.value)} placeholder="e.g. groceries" />
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button className="px-3 py-1 border rounded" onClick={()=>setCreateOpen(false)}>Cancel</button>
+              <button className="px-3 py-1 border rounded" onClick={createRule}>Create</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -74,9 +74,23 @@ curl -sS -H 'x-dev-auth-uid: dev-user' -H 'content-type: application/json' \
   -d '{"tenantId":"dev","days":7,"dryRun":false}' \
   http://localhost:$PORT/api/categorizer/apply | jq '.updated, .recomputed'
 
+# Dry run and include Starbucks + exclude Uber
+curl -sS -H 'x-dev-auth-uid: dev-user' -H 'content-type: application/json' \
+  -d '{"tenantId":"dev","days":30,"dryRun":true,
+       "includeMerchants":["starbucks|coffee"],
+       "excludeMerchants":["uber|lyft"]}' \
+  http://localhost:$PORT/api/categorizer/apply | jq '.updated, .preview | length, .preview[0]'
+
+# Apply a curated set of tx ids from the preview
+curl -sS -H 'x-dev-auth-uid: dev-user' -H 'content-type: application/json' \
+  -d '{"tenantId":"dev","dryRun":false,
+       "onlyTxIds":["<txid1>","<txid2>","<txid3>"]}' \
+  http://localhost:$PORT/api/categorizer/apply | jq '.updated, .recomputed'
+
 # E2E tests
 npx playwright install --with-deps
 BASE_URL=http://localhost:$PORT npx playwright test tests/e2e/categorizer-apply.spec.ts
+BASE_URL=http://localhost:$PORT npx playwright test tests/e2e/categorizer-rules-api.spec.ts
 ```
 
 ### Known ESLint Warnings
@@ -84,4 +98,3 @@ BASE_URL=http://localhost:$PORT npx playwright test tests/e2e/categorizer-apply.
 The following ESLint warnings are known and can be safely ignored for now:
 
 - **import-order**: The CI step for linting (`lint:strict`) is allowed to fail if only import-order warnings are present. This will be addressed in a future specification.
-

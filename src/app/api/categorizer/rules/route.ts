@@ -7,6 +7,7 @@ const Rule = z.object({
   merchantPattern: z.string().min(1),
   envId: z.string().min(1),
   pct: z.number().int().min(1).max(100).optional().default(100),
+  name: z.string().optional(),
 })
 
 function devUid(req: NextRequest){
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest){
   if (!uid) return new Response('unauthorized', { status: 401 })
   const url = new URL(req.url)
   const tenantId = url.searchParams.get('tenantId') || 'dev'
-  const snap = await adminDb.collection(`tenants/${tenantId}/categorizer_rules`).get()
+  const snap = await adminDb.collection(`tenants/${tenantId}/categorizer_rules`).orderBy('createdAt','desc').limit(200).get()
   const rules = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
   return Response.json({ rules })
 }
@@ -39,14 +40,18 @@ export async function POST(req: NextRequest){
   const url = new URL(req.url)
   const tenantId = url.searchParams.get('tenantId') || 'dev'
   const parsed = Rule.parse(body)
-  const id = parsed.id || parsed.merchantPattern.replace(/[^a-z0-9]+/gi,'_').toLowerCase().slice(0,40) || crypto.randomUUID()
-  await adminDb.doc(`tenants/${tenantId}/categorizer_rules/${id}`).set({
+  const ref = adminDb.collection(`tenants/${tenantId}/categorizer_rules`).doc()
+  const doc = {
+    id: ref.id,
+    name: parsed.name || parsed.merchantPattern,
     merchantPattern: parsed.merchantPattern,
-    envId: parsed.envId,
     pct: parsed.pct ?? 100,
+    envId: parsed.envId,
+    createdAt: Date.now(),
     updatedAt: Date.now(),
-  }, { merge: true })
-  return Response.json({ ok: true, id })
+  }
+  await ref.set(doc)
+  return Response.json({ ok: true, rule: doc })
 }
 
 export async function DELETE(req: NextRequest){

@@ -16,7 +16,9 @@ export function inferSplits(rules: CatRule[], merchant: string, amountCents: num
   // For expenses (negative amounts), split positive cents across envelopes
   const abs = Math.abs(amountCents)
   const matches = rules.filter(r => new RegExp(r.merchantPattern, 'i').test(merchant))
-  if (!matches.length) return [] as Array<{ envId: string; amountCents: number }>
+  if (!matches.length) return { splits: [], ruleHit: null }
+
+  const ruleHit = matches[0]; // Assuming single rule hit for now for simplicity
   const totalPct = matches.reduce((a, r) => a + (r.pct ?? 100), 0)
   const out: Array<{ envId: string; amountCents: number }> = []
   let allocated = 0
@@ -28,5 +30,5 @@ export function inferSplits(rules: CatRule[], merchant: string, amountCents: num
     allocated += share
     out.push({ envId: r.envId, amountCents: share })
   }
-  return out
+  return { splits: out, ruleHit }
 }

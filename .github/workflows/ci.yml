@@ -35,4 +35,3 @@ jobs:
         run: |
           npx --yes playwright install --with-deps
           BASE_URL=http://localhost:9000 npx playwright test tests/e2e/*.spec.ts --reporter=line
-

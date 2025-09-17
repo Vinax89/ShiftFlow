@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { adminAuth, adminDb } from '@/lib/admin'
+import { loadRules, inferSplits } from '@/lib/categorizer/rules'
 
 const Body = z.object({
   tenantId: z.string(),
@@ -39,11 +40,17 @@ export async function POST(req: NextRequest) {
   if (!uid) return new Response('Unauthorized', { status: 401 })
   const { tenantId, accountId, amountCents, currency, dateISO, merchant, memo, splits } = Body.parse(await req.json())
 
+  let finalSplits = splits
+  if (!finalSplits || finalSplits.length === 0) {
+    const rules = await loadRules(tenantId)
+    finalSplits = inferSplits(rules, merchant, amountCents)
+  }
+
   const txRef = await adminDb.collection(`tenants/${tenantId}/transactions`).add({
     accountId, amountCents, currency, date: new Date(dateISO).getTime(), merchant, memo: memo || '', status: 'posted', source: 'manual', createdAt: Date.now()
   })
-  if (splits && splits.length) {
-    await adminDb.doc(`tenants/${tenantId}/budget_tx_index/${txRef.id}`).set({ splits, source: 'manual', updatedAt: Date.now() })
+  if (finalSplits && finalSplits.length) {
+    await adminDb.doc(`tenants/${tenantId}/budget_tx_index/${txRef.id}`).set({ splits: finalSplits, source: 'rule', updatedAt: Date.now() })
   }
   // Kick a recompute for the transaction date (assumes planId 'baseline' for MVP)
   const headers: HeadersInit = { 'content-type': 'application/json' }

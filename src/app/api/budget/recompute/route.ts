@@ -58,6 +58,17 @@ export async function POST(req: NextRequest) {
     const results: any[] = []
     for (const dateISO of dates) {
       const key = periodKeyFor(dateISO, plan.periodConfig, plan.tz)
+      // Coalesce rapid repeats: if a lock exists updated < 2s ago, skip recompute
+      const lockRef = adminDb.doc(`tenants/${tenantId}/locks/recompute_${key}`)
+      const lockSnap = await lockRef.get()
+      const now = Date.now()
+      const recent = lockSnap.exists && now - ((lockSnap.data() as any).updatedAt ?? 0) < 2000
+      await lockRef.set({ updatedAt: now }, { merge: true })
+      if (recent) {
+        results.push({ dateISO, periodKey: key, ok: true, skipped: true })
+        continue
+      }
+
       const prevKey = (() => {
         const d = new Date(dateISO); d.setDate(d.getDate() - 1)
         const ymd = d.toISOString().slice(0, 10)

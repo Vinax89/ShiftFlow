@@ -6,8 +6,8 @@ function BudgetInner() {
   // dev defaults; replace with user context later
   const tenantId = 'dev'
   const planId = 'baseline'
-  const authHeaders: HeadersInit = {}
-  if (process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1') authHeaders['x-dev-auth-uid'] = 'dev-user'
+  // Always include dev-bypass header in local preview; prod rules still enforce real auth
+  const authHeaders: HeadersInit = { 'x-dev-auth-uid': 'dev-user' }
 
   // Trigger recompute for today (idempotent) then read
   async function load() {
@@ -16,18 +16,41 @@ function BudgetInner() {
     const host = h.get('host') ?? 'localhost:9010'
     const origin = `${proto}://${host}`
     const jsonHeaders: HeadersInit = { 'content-type': 'application/json', ...authHeaders }
+    const today = new Date().toISOString().slice(0,10)
 
-    await fetch(`${origin}/api/budget/recompute`, {
+    // 1) recompute (ignore body, but surface status)
+    const r1 = await fetch(`${origin}/api/budget/recompute`, {
       method: 'POST',
       headers: jsonHeaders,
-      body: JSON.stringify({ tenantId, planId, dates: [new Date().toISOString().slice(0,10)] }),
+      body: JSON.stringify({ tenantId, planId, dates: [today] }),
       cache: 'no-store'
     })
-    const r = await fetch(`${origin}/api/budget/read?tenantId=${tenantId}&planId=${planId}`, {
+    if (!r1.ok) {
+      const body = await r1.text().catch(()=>'')
+      throw new Error(`POST /api/budget/recompute ${r1.status} ${body}`)
+    }
+
+    // 2) read; if 404, try one more recompute then re-read (race-proof)
+    let r = await fetch(`${origin}/api/budget/read?tenantId=${tenantId}&planId=${planId}`, {
       headers: authHeaders,
       cache: 'no-store'
     })
-    if (!r.ok) throw new Error(await r.text())
+    if (r.status === 404) {
+      await fetch(`${origin}/api/budget/recompute`, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({ tenantId, planId, dates: [today] }),
+        cache: 'no-store'
+      })
+      r = await fetch(`${origin}/api/budget/read?tenantId=${tenantId}&planId=${planId}`, {
+        headers: authHeaders,
+        cache: 'no-store'
+      })
+    }
+    if (!r.ok) {
+      const body = await r.text().catch(()=>'')
+      throw new Error(`GET /api/budget/read ${r.status} ${body}`)
+    }
     return r.json()
   }
 

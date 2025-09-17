@@ -1,0 +1,6 @@
+# Finance core (WASM) and Functions require review from maintainers
+/engine/**      @your-org/maintainers
+/functions/**   @your-org/maintainers
+
+# Optional: guard core config
+/.github/workflows/**  @your-org/maintainers

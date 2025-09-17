@@ -1,3 +1,4 @@
+
 # Auto-label PRs by touched paths. Patterns support minimatch/globs.
 
 # ── Areas (features/engines) ────────────────────────────────────────────────

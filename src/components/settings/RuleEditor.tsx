@@ -1,3 +1,4 @@
+
 'use client'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -5,6 +6,8 @@ import { useToast } from '@/components/ui/toast'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { useRecomputeBatch } from '@/hooks/useRecomputeBatch'
+import { DriftButton } from '@/components/settings/DriftButton'
 
 export function RuleEditor({ initial }: { initial: any[] }){
   const [rules, setRules] = useState(initial)
@@ -14,7 +17,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
   const [testInput, setTestInput] = useState('Starbucks Market #123')
   const [applyDays, setApplyDays] = useState(30)
   const [merchants, setMerchants] = useState<string[]>([])
-  const [dryRun, setDryRun] = useState(true)
+  const [dryRunResult, setDryRunResult] = useState<any>(null)
   const [busy, setBusy] = useState<'idle'|'scanning'|'recomputing'|'done'>('idle')
   const [preview, setPreview] = useState<any[]|null>(null)
   const { toast } = useToast()
@@ -24,36 +27,49 @@ export function RuleEditor({ initial }: { initial: any[] }){
   const [createMerchant, setCreateMerchant] = useState<string>('')
   const [envOptions, setEnvOptions] = useState<Array<{id:string;name:string}>>([])
   const [envId, setEnvId] = useState('')
+  const [accounts, setAccounts] = useState<Array<{id:string,name:string,mask?:string}>>([])
+  const [scope, setScope] = useState<{ since?:string; until?:string; accountId?:string }>({})
+  const { progress, run: runRecompute } = useRecomputeBatch()
+
 
   async function refresh(){
     const resp = await fetch(`/api/categorizer/rules?tenantId=dev`, { headers: dev ? { 'x-dev-auth-uid': 'dev-user' } : undefined, cache: 'no-store' })
-    setRules((await resp.json()).rules)
+    const data = await resp.json();
+    setRules(data.items || [])
   }
   useEffect(()=>{ setRules(initial) }, [initial])
 
-  useEffect(() => { (async () => {
+  useEffect(() => { 
     const headers: HeadersInit = {}
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const r = await fetch(`/api/categorizer/merchants?tenantId=dev&days=60`, { headers, cache: 'no-store' })
-    if (r.ok) setMerchants((await r.json()).merchants)
-  })() }, [dev])
+    
+    ;(async () => {
+      const r = await fetch(`/api/categorizer/merchants?tenantId=dev&days=60`, { headers, cache: 'no-store' })
+      if (r.ok) setMerchants((await r.json()).merchants)
+    })();
+
+    fetch('/api/accounts?tenantId=dev', { headers })
+      .then(r=>r.json()).then(j=> setAccounts(Array.isArray(j.items)? j.items : []))
+      .catch(()=> setAccounts([]))
+  }, [dev])
+
 
   async function addOrSave(e: React.FormEvent<HTMLFormElement>){
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     const merchantPattern = String(fd.get('merchantPattern')||'').trim()
     const envId = String(fd.get('envId')||'').trim()
-    const pct = Number(fd.get('pct')||'100')
-    if (!merchantPattern || !envId || pct<1 || pct>100){ alert('Invalid rule'); return }
+    if (!merchantPattern || !envId){ alert('Invalid rule'); return }
     const headers: HeadersInit = { 'content-type': 'application/json' }
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const res = await fetch(`/api/categorizer/rules?tenantId=dev`, { method: 'POST', headers, body: JSON.stringify({ merchantPattern, envId, pct }) })
+    const res = await fetch(`/api/categorizer/rules?tenantId=dev`, { method: 'POST', headers, body: JSON.stringify({ merchantPattern, envId }) })
     if (!res.ok) { alert(await res.text()); return }
     (e.currentTarget as HTMLFormElement).reset()
     await refresh()
   }
 
   async function remove(id: string){
+    if(!confirm(`Are you sure you want to delete rule ${id}?`)) return;
     const headers: HeadersInit = {}
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
     const res = await fetch(`/api/categorizer/rules?tenantId=dev&id=${encodeURIComponent(id)}`, { method: 'DELETE', headers })
@@ -62,12 +78,12 @@ export function RuleEditor({ initial }: { initial: any[] }){
   }
 
   const testMatches = useMemo(() => {
-    return initial
+    return rules
       .filter((r:any) => new RegExp(r.merchantPattern,'i').test(testInput))
-      .map((r:any) => `${r.envId}${r.pct?` (${r.pct}%)`:''}`)
-  }, [initial, testInput])
+      .map((r:any) => `${r.splits?.[0]?.envId || r.envId}${r.pct?` (${r.pct}%)`:''}`)
+  }, [rules, testInput])
 
-  async function applyNow(){
+  async function applyNow(dryRun = true){
     setBusy('scanning')
     const headers: HeadersInit = { 'content-type': 'application/json' }
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
@@ -96,6 +112,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
       setPreview(null)
       setBusy('done')
       toast({ title: 'Apply complete', description: `Updated ${body.updated} txns; recomputed ${body.recomputed} periods` })
+      await refresh(); // Refresh rules to show any changes
     }
   }
 
@@ -129,13 +146,14 @@ export function RuleEditor({ initial }: { initial: any[] }){
     setBusy('recomputing')
     const headers: HeadersInit = { 'content-type': 'application/json' }
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const res = await fetch(`/api/categorizer/apply`, { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', dryRun: false, onlyTxIds: ids }) })
+    const res = await fetch(`/api/categorizer/apply`, { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', dryRun: false, onlyTxIds: ids, triggerRecompute: true }) })
     const body = await (res.ok ? res.json() : res.text())
     setBusy('done')
     if (!res.ok) { toast({ variant: 'destructive', title: 'Apply failed', description: String(body).slice(0,300) }); return }
     toast({ title: 'Applied selected', description: `Updated ${body.updated} txns; recomputed ${body.recomputed} periods` })
     // clear preview after apply
     setPreview(null); setSelectedIds(new Set()); setMerchantKeep({})
+    await refresh()
   }
 
   async function openCreateFor(merchant: string){
@@ -156,7 +174,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
     const res = await fetch(`/api/categorizer/rules?tenantId=dev`, { method:'POST', headers, body: JSON.stringify({ tenantId: 'dev', merchantPattern: createMerchant, envId }) })
     const body = await (res.ok ? res.json() : res.text())
-    if (!res.ok) { toast({ title:'Create rule failed', description: String(body).slice(0,300) }); return }
+    if (!res.ok) { toast({ variant: 'destructive', title:'Create rule failed', description: String(body).slice(0,300) }); return }
     toast({ title:'Rule created', description: `${createMerchant} → ${envId}` })
     setCreateOpen(false)
     await refresh()
@@ -173,10 +191,6 @@ export function RuleEditor({ initial }: { initial: any[] }){
           <div className="text-xs text-gray-500 mb-1">Envelope</div>
           <input name="envId" className="w-40 border rounded px-2 py-1" placeholder="Groceries" />
         </label>
-        <label>
-          <div className="text-xs text-gray-500 mb-1">Percent</div>
-          <input name="pct" type="number" min={1} max={100} defaultValue={100} className="w-24 border rounded px-2 py-1" />
-        </label>
         <button disabled={pending} className="px-3 py-1 rounded border">{pending? 'Saving…':'Add rule'}</button>
       </form>
 
@@ -185,7 +199,6 @@ export function RuleEditor({ initial }: { initial: any[] }){
           <tr className="text-left">
             <th className="p-2">Merchant regex</th>
             <th className="p-2">Envelope</th>
-            <th className="p-2">%</th>
             <th className="p-2">Actions</th>
           </tr>
         </thead>
@@ -193,9 +206,9 @@ export function RuleEditor({ initial }: { initial: any[] }){
           {rules.map((r:any)=> (
             <tr key={r.id} className="border-t">
               <td className="p-2 font-mono text-xs">{r.merchantPattern}</td>
-              <td className="p-2">{r.envId}</td>
-              <td className="p-2">{r.pct ?? 100}</td>
-              <td className="p-2">
+              <td className="p-2">{(r.splits||[]).map((s:any)=>`${s.envId} (${s.pct}%)`).join(', ')}</td>
+              <td className="p-2 flex gap-2">
+                <DriftButton ruleId={r.id} />
                 <button onClick={()=>remove(r.id)} className="px-2 py-1 rounded border">Delete</button>
               </td>
             </tr>
@@ -223,9 +236,9 @@ export function RuleEditor({ initial }: { initial: any[] }){
             <label className="text-sm">Days</label>
             <input type="number" min={1} max={90} value={applyDays} onChange={e=>setApplyDays(Number(e.target.value||30))} className="w-24 border rounded px-2 py-1" />
             <label className="text-sm inline-flex items-center gap-2 ml-2">
-              <input type="checkbox" checked={dryRun} onChange={e=>setDryRun(e.target.checked)} /> Dry run
+              <input type="checkbox" checked={busy==='idle' || (preview != null)} onChange={e=>setPreview(e.target.checked ? preview : null)} /> Dry run
             </label>
-            <button onClick={applyNow} className="px-3 py-1 rounded border" disabled={busy!=='idle'}>{busy!=='idle'?'Running…':'Run'}</button>
+            <button onClick={()=>applyNow(busy === 'idle' || !!preview)} className="px-3 py-1 rounded border" disabled={busy!=='idle' && busy !== 'done'}>{busy!=='idle' && busy !== 'done' ?'Running…':'Run'}</button>
           </div>
           <p className="text-xs text-gray-500 mt-2">Backfills uncategorized txns and recomputes affected periods.</p>
 
@@ -240,7 +253,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
           )}
 
           {/* Merchant chips */}
-          {dryRun && preview && (
+          {preview && (
             <div className="mt-4">
               <div className="text-sm font-medium mb-1">Filter by merchant</div>
               <div className="flex flex-wrap gap-2 mb-2">
@@ -268,7 +281,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
           )}
 
           {/* Dry run preview */}
-          {dryRun && preview && (
+          {preview && (
             <div className="mt-4">
               <div className="text-sm font-medium mb-1">Dry run result</div>
               <div className="text-xs text-gray-500 mb-2">Showing up to {preview.length} matches</div>
@@ -343,12 +356,11 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                       </div>
                                     ))}
                                   </div>
-                                  <div className="flex items-center gap-2 mb-2">
+                                  <div className="flex flex-wrap items-center gap-2 mb-2">
                                     <button
                                       className="px-2 py-1 border rounded"
                                       onClick={async()=>{
                                         try {
-                                          // recompute live simulation on last 100 txns
                                           const headers: HeadersInit = { 'content-type': 'application/json' }
                                           if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
                                           const body = {
@@ -368,7 +380,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                           }))
                                           toast({ title: 'Simulated', description: `${j.hits} matches in last 100 txns` })
                                         } catch(e:any) {
-                                          toast({ title: 'Simulation failed', description: String(e).slice(0,200) })
+                                          toast({ variant: 'destructive', title: 'Simulation failed', description: String(e).slice(0,200) })
                                         }
                                       }}
                                     >Simulate (last 100)</button>
@@ -389,13 +401,86 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                           if (!res.ok) throw new Error(await res.text())
                                           toast({ title: 'Rule updated', description: 'Saved edits' })
                                         } catch(e:any) {
-                                          toast({ title: 'Save failed', description: String(e).slice(0,200) })
+                                          toast({ variant: 'destructive', title: 'Save failed', description: String(e).slice(0,200) })
                                         }
                                       }}
                                     >Save edits</button>
+                                     <button
+                                      className="px-2 py-1 border rounded bg-emerald-50"
+                                      onClick={async()=>{
+                                        if (!confirm('Apply this rule to recent matching transactions?')) return
+                                        try {
+                                          const headers: HeadersInit = { 'content-type': 'application/json' }
+                                          if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
+                                          const body = {
+                                            tenantId: 'dev',
+                                            merchantPattern: p.why?.regex || (p.matchReason as any)?.pattern,
+                                            splits: (p.why?.splits||[]).map((x:any)=>({ envId: x.envId, pct: x.pct })),
+                                            limit: 500, since: scope.since, until: scope.until, accountId: scope.accountId,
+                                            triggerRecompute: false
+                                          }
+                                          const r = await fetch(`/api/categorizer/rules/apply`, { method:'POST', headers, body: JSON.stringify(body) })
+                                          const j = await (r.ok ? r.json() : r.text())
+                                          if (!r.ok) throw new Error(String(j))
+                                          toast({ title: 'Applied', description: `${j.count} transactions updated` })
+                                          // Now batch recompute with progress
+                                          const h: HeadersInit = { 'content-type':'application/json' }
+                                          if (dev) (h as any)['x-dev-auth-uid'] = 'dev-user'
+                                          await runRecompute(j.dates || [], h)
+                                          toast({ title: 'Recompute complete', description: `${(j.dates||[]).length} dates refreshed` })
+                                        } catch(e:any) {
+                                          toast({ variant: 'destructive', title: 'Apply failed', description: String(e).slice(0,200) })
+                                        }
+                                      }}
+                                    >Apply to matches</button>
+                                    <button
+                                      className="px-2 py-1 border rounded bg-rose-50"
+                                      onClick={async()=>{
+                                        if (!confirm('Undo the most recent rule apply?')) return
+                                        try {
+                                          const headers: HeadersInit = { 'content-type': 'application/json' }
+                                          if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
+                                          const r = await fetch(`/api/categorizer/rules/undo`, { method:'POST', headers, body: JSON.stringify({ tenantId: 'dev' }) })
+                                          const j = await (r.ok ? r.json() : r.text())
+                                          if (!r.ok) throw new Error(String(j))
+                                          toast({ title: 'Undo complete', description: `${j.undone} transactions reverted` })
+                                        } catch(e:any) {
+                                          toast({ variant: 'destructive', title: 'Undo failed', description: String(e).slice(0,200) })
+                                        }
+                                      }}
+                                    >Undo last apply</button>
                                   </div>
 
-                                  <div className="flex items-center gap-3">
+                                   {dryRunResult && (
+                                     <div className="mt-2 max-h-56 overflow-auto border rounded">
+                                       <table className="w-full text-xs">
+                                         <thead className="bg-gray-50"><tr>
+                                           <th className="text-left px-2 py-1">Tx</th>
+                                           <th className="text-left px-2 py-1">Merchant</th>
+                                           <th className="text-right px-2 py-1">Amount</th>
+                                           <th className="text-left px-2 py-1">Prev</th>
+                                           <th className="text-left px-2 py-1">Next</th>
+                                         </tr></thead>
+                                         <tbody>
+                                           {dryRunResult.sample?.map((s:any)=>(
+                                             <tr key={s.txId} className="odd:bg-white even:bg-gray-50">
+                                               <td className="px-2 py-1 font-mono">{s.txId.slice(0,6)}</td>
+                                               <td className="px-2 py-1">{s.merchant}</td>
+                                               <td className="px-2 py-1 text-right">{(s.amountCents/100).toFixed(2)}</td>
+                                               <td className="px-2 py-1">
+                                                 {(s.prev?.splits||[]).map((x:any)=>`${x.envId}:${(x.amountCents/100).toFixed(2)}`).join(', ')||'—'}
+                                               </td>
+                                               <td className="px-2 py-1">
+                                                 {(s.next?.splits||[]).map((x:any)=>`${x.envId}:${(x.amountCents/100).toFixed(2)}`).join(', ')}
+                                               </td>
+                                             </tr>
+                                           ))}
+                                         </tbody>
+                                       </table>
+                                     </div>
+                                    )}
+                                  
+                                  <div className="mt-4 flex items-center gap-3">
                                     <Label htmlFor={`rule-act-${p.matchReason.ruleId}`} className="text-gray-500">Active</Label>
                                     <Switch id={`rule-act-${p.matchReason.ruleId}`}
                                       checked={!!p.matchReason.active}
@@ -412,11 +497,12 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                           }) : row))
                                           toast({ title: 'Rule updated', description: `rule:${p.matchReason.ruleId} active=${!!val}` })
                                         } catch (e:any) {
-                                          toast({ title: 'Update failed', description: String(e).slice(0,200) })
+                                          toast({ variant: 'destructive', title: 'Update failed', description: String(e).slice(0,200) })
                                         }
                                       }}
                                     />
                                   </div>
+                                   {progress && <div className="text-xs text-gray-600">Recompute: {progress.done}/{progress.total}</div>}
                                 </PopoverContent>
                               </Popover>
                             </div>
@@ -430,7 +516,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <button onClick={applySelected} className="px-3 py-1 rounded border">Apply selected now</button>
-                <button onClick={async()=>{ setDryRun(false); await applyNow(); setDryRun(true) }} className="px-3 py-1 rounded border">Apply all shown</button>
+                <button onClick={() => applyNow(false)} className="px-3 py-1 rounded border">Apply all shown</button>
               </div>
             </div>
           )}
@@ -439,11 +525,11 @@ export function RuleEditor({ initial }: { initial: any[] }){
       {/* Create Rule modal */}
       {createOpen && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded-xl w-[420px] shadow-xl">
+          <div className="bg-background p-4 rounded-xl w-[420px] shadow-xl border">
             <div className="text-sm font-medium mb-2">Create rule</div>
-            <div className="text-xs text-gray-500 mb-3">Merchant pattern</div>
+            <div className="text-xs text-muted-foreground mb-3">Merchant pattern</div>
             <input className="w-full border rounded px-2 py-1 mb-3" value={createMerchant} onChange={e=>setCreateMerchant(e.target.value)} />
-            <div className="text-xs text-gray-500 mb-1">Envelope</div>
+            <div className="text-xs text-muted-foreground mb-1">Envelope</div>
             {envOptions.length ? (
               <select className="w-full border rounded px-2 py-1 mb-4" value={envId} onChange={e=>setEnvId(e.target.value)}>
                 {envOptions.map(o=> <option key={o.id} value={o.id}>{o.name} ({o.id})</option>)}

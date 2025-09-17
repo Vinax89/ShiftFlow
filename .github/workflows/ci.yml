@@ -1,3 +1,4 @@
+
 name: Node.js CI
 
 on:
@@ -40,13 +41,11 @@ jobs:
       - name: Install
         run: npm ci
 
-      # Non-blocking typecheck/lint (import-order can warn)
       - name: Typecheck + Lint (non-blocking for import-order)
         run: |
           npm run -s typecheck || true
           npm run -s lint || true
 
-      # Blocking export audit per SPEC-001
       - name: Export audit (blocking)
         run: node scripts/audit-exports.js
 

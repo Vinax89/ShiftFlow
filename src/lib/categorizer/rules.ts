@@ -3,6 +3,8 @@ import { adminDb } from '@/lib/admin'
 export type CatRule = {
   id: string
   merchantPattern: string // JS regex string, e.g. "market|grocery"
+  active?: boolean;
+  splits?: Array<{ envId: string; pct: number }>;
   envId: string
   pct?: number // default 100
 }
@@ -19,12 +21,13 @@ export function inferSplits(rules: CatRule[], merchant: string, amountCents: num
   if (!matches.length) return { splits: [], ruleHit: null }
 
   const ruleHit = matches[0]; // Assuming single rule hit for now for simplicity
-  const totalPct = matches.reduce((a, r) => a + (r.pct ?? 100), 0)
+  const splitsDef = ruleHit.splits && ruleHit.splits.length > 0 ? ruleHit.splits : [{ envId: ruleHit.envId, pct: ruleHit.pct ?? 100 }]
+  const totalPct = splitsDef.reduce((a, r) => a + (r.pct ?? 100), 0)
   const out: Array<{ envId: string; amountCents: number }> = []
   let allocated = 0
-  for (let i = 0; i < matches.length; i++) {
-    const r = matches[i]
-    const share = i === matches.length - 1
+  for (let i = 0; i < splitsDef.length; i++) {
+    const r = splitsDef[i]
+    const share = i === splitsDef.length - 1
       ? abs - allocated
       : Math.floor((abs * (r.pct ?? 100)) / totalPct)
     allocated += share

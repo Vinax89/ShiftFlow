@@ -46,8 +46,8 @@ export async function POST(req: NextRequest){
     id: ref.id,
     name: parsed.name || parsed.merchantPattern,
     merchantPattern: parsed.merchantPattern,
-    pct: parsed.pct ?? 100,
-    envId: parsed.envId,
+    active: true,
+    splits: [{ envId: parsed.envId, pct: 100 }],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }

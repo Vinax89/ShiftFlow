@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { adminDb, adminAuth } from '@/lib/admin'
 import { inferSplits } from '@/lib/categorizer/rules'
+import type { CatRule } from '@/lib/categorizer/rules'
 
 const Body = z.object({
   tenantId: z.string().default('dev'),
@@ -30,9 +31,9 @@ async function requireUid(req: NextRequest){
   try { const tok = await adminAuth.verifyIdToken(authz.slice(7)); return tok.uid } catch { return null }
 }
 
-async function loadRules(tenantId: string){
+async function loadRules(tenantId: string): Promise<CatRule[]> {
   const snap = await adminDb.collection(`tenants/${tenantId}/categorizer_rules`).get()
-  return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Array<{id:string, merchantPattern:string, envId:string, pct?:number, active?: boolean, splits?: Array<{ envId:string; pct:number }>}>
+  return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
 }
 
 export async function POST(req: NextRequest){
@@ -106,7 +107,7 @@ export async function POST(req: NextRequest){
     if (idx.exists) continue // do not clobber manual/rule choices
 
     // derive YYYY-MM-DD for recompute date bucket
-    const dt = tx.date && tx.date.toDate ? tx.date.toDate() : (typeof tx.date==='number' ? new Date(tx.date) : new Date(tx.date))
+    const dt = tx.date && tx.date.toDate ? tx.date.toDate() : (typeof tx.date==='number' ? new Date(tx.date) : new Date())
     const ymd = isNaN(+dt) ? new Date().toISOString().slice(0,10) : dt.toISOString().slice(0,10)
 
     if (dryRun) {

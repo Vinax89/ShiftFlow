@@ -297,14 +297,104 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[340px] text-xs">
                                   <div className="font-medium mb-1">Why this rule?</div>
-                                  <div className="mb-1"><span className="text-gray-500">Pattern:</span> <code>/{p.why?.regex}/{p.why?.flags}</code></div>
+                                  
+                                  {/* Editable Pattern */}
+                                  <div className="mb-1">
+                                    <span className="text-gray-500 mr-2">Pattern:</span>
+                                    <input
+                                      className="border rounded px-2 py-1 w-[220px]"
+                                      value={(p.why?.regex ?? p.matchReason?.type==='rule' ? (p.matchReason as any).pattern : '') as string}
+                                      onChange={(e)=>{
+                                        const val = e.target.value
+                                        setPreview(prev => prev!.map(row => row.txId===p.txId ? ({
+                                          ...row,
+                                          why: { ...(row.why||{}), regex: val, flags: 'i' }
+                                        }) : row))
+                                      }}
+                                    />
+                                  </div>
                                   {p.why?.groups?.length ? (
                                     <div className="mb-1"><span className="text-gray-500">Groups:</span> {p.why?.groups.map((g:any,i:number)=>(<code key={i} className="mr-1">${i+1}:{g}</code>))}</div>
                                   ) : null}
-                                  <div className="mb-1 text-gray-500">Split math:</div>
-                                  <ul className="mb-2 list-disc pl-5">
-                                    {p.why?.splits?.map((s:any,i:number)=>(<li key={i}><code>{s.envId}</code> · {s.pct}% → {(s.amountCents/100).toFixed(2)}</li>))}
-                                  </ul>
+                                  
+                                  {/* Editable Splits (envId + pct) */}
+                                  <div className="mb-1 text-gray-500">Splits (must total 100%)</div>
+                                  <div className="mb-2 space-y-1">
+                                    {(p.why?.splits ?? []).map((s:any, i:number) => (
+                                      <div key={i} className="flex items-center gap-2">
+                                        <input className="border rounded px-2 py-0.5 w-28" value={s.envId}
+                                          onChange={(e)=>{
+                                            const v = e.target.value
+                                            setPreview(prev => prev!.map(row => row.txId===p.txId ? ({
+                                              ...row,
+                                              why: { ...(row.why||{}), splits: (row.why!.splits||[]).map((x:any,ix:any)=> ix===i? { ...x, envId: v }: x) }
+                                            }) : row))
+                                          }} />
+                                        <input type="number" min={0} max={100} className="border rounded px-2 py-0.5 w-20" value={s.pct}
+                                          onChange={(e)=>{
+                                            const v = Math.max(0, Math.min(100, Number(e.target.value)))
+                                            setPreview(prev => prev!.map(row => row.txId===p.txId ? ({
+                                              ...row,
+                                              why: { ...(row.why||{}), splits: (row.why!.splits||[]).map((x:any,ix:any)=> ix===i? { ...x, pct: v }: x) }
+                                            }) : row))
+                                          }} />
+                                        <span className="text-gray-400 text-xs">%</span>
+                                        <span className="text-gray-500 text-xs">→ {(s.amountCents/100).toFixed(2)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <button
+                                      className="px-2 py-1 border rounded"
+                                      onClick={async()=>{
+                                        try {
+                                          // recompute live simulation on last 100 txns
+                                          const headers: HeadersInit = { 'content-type': 'application/json' }
+                                          if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
+                                          const body = {
+                                            tenantId: 'dev',
+                                            merchantPattern: p.why?.regex || '',
+                                            splits: (p.why?.splits||[]).map((x:any)=>({ envId: x.envId, pct: x.pct })),
+                                            limit: 100,
+                                          }
+                                          const r = await fetch(`/api/categorizer/rules/simulate`, { method:'POST', headers, body: JSON.stringify(body) })
+                                          const j = await (r.ok ? r.json() : r.text())
+                                          if (!r.ok) throw new Error(String(j))
+                                          // local annotate: show hit count + swap first few rows’ why/splits amounts to the simulated amounts
+                                          const first = Array.isArray(j.sample) ? j.sample : []
+                                          setPreview(prev => prev!.map(row => {
+                                            const s = first.find((x:any)=>x.txId===row.txId)
+                                            return s ? ({ ...row, why: { ...(row.why||{}), splits: s.splits }, splits: s.splits }) : row
+                                          }))
+                                          toast({ title: 'Simulated', description: `${j.hits} matches in last 100 txns` })
+                                        } catch(e:any) {
+                                          toast({ title: 'Simulation failed', description: String(e).slice(0,200) })
+                                        }
+                                      }}
+                                    >Simulate (last 100)</button>
+                                    <button
+                                      className="px-2 py-1 border rounded"
+                                      onClick={async()=>{
+                                        try {
+                                          const headers: HeadersInit = { 'content-type': 'application/json' }
+                                          if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
+                                          const res = await fetch(`/api/categorizer/rules/${(p.matchReason as any).ruleId}`, {
+                                            method: 'PATCH', headers,
+                                            body: JSON.stringify({
+                                              tenantId: 'dev',
+                                              merchantPattern: p.why?.regex,
+                                              splits: (p.why?.splits||[]).map((x:any)=>({ envId: x.envId, pct: x.pct }))
+                                            })
+                                          })
+                                          if (!res.ok) throw new Error(await res.text())
+                                          toast({ title: 'Rule updated', description: 'Saved edits' })
+                                        } catch(e:any) {
+                                          toast({ title: 'Save failed', description: String(e).slice(0,200) })
+                                        }
+                                      }}
+                                    >Save edits</button>
+                                  </div>
+
                                   <div className="flex items-center gap-3">
                                     <Label htmlFor={`rule-act-${p.matchReason.ruleId}`} className="text-gray-500">Active</Label>
                                     <Switch id={`rule-act-${p.matchReason.ruleId}`}

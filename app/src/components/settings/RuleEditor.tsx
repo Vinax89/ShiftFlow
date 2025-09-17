@@ -49,7 +49,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
     })();
 
     fetch('/api/accounts?tenantId=dev', { headers })
-      .then(r=>r.json()).then(j=> setAccounts(Array.isArray(j)? j : (j.items||[])))
+      .then(r=>r.json()).then(j=> setAccounts(Array.isArray(j.items)? j.items : []))
       .catch(()=> setAccounts([]))
   }, [dev])
 

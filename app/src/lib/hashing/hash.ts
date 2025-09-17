@@ -1,3 +1,4 @@
+
 // Server-safe, dependency-free hash used for inputsHash in recompute.
 // We use sha256(hex) and truncate to 16 chars (64 bits) for compactness.
 import { createHash } from 'node:crypto'

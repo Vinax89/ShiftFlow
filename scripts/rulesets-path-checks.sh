@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
 # Usage: ./scripts/rulesets-path-checks.sh <owner/repo> [branch=main] [branch2=spec-001-fixes]
@@ -13,6 +12,7 @@ REQ_WORKFLOWS=(
   ".github/workflows/ci.yml"
   ".github/workflows/codeql.yml"
   ".github/workflows/Bearer.yml"
+  ".github/workflows/apisec.yml"
 )
 
 # Resolve repo metadata

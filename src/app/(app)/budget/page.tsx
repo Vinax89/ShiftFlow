@@ -18,43 +18,51 @@ function BudgetInner() {
     const jsonHeaders: HeadersInit = { 'content-type': 'application/json', ...authHeaders }
     const today = new Date().toISOString().slice(0,10)
 
-    // 1) recompute (ignore body, but surface status)
-    const r1 = await fetch(`${origin}/api/budget/recompute`, {
-      method: 'POST',
-      headers: jsonHeaders,
-      body: JSON.stringify({ tenantId, planId, dates: [today] }),
-      cache: 'no-store'
-    })
-    if (!r1.ok) {
-      const body = await r1.text().catch(()=>'')
-      throw new Error(`POST /api/budget/recompute ${r1.status} ${body}`)
-    }
-
-    // 2) read; if 404, try one more recompute then re-read (race-proof)
-    let r = await fetch(`${origin}/api/budget/read?tenantId=${tenantId}&planId=${planId}`, {
-      headers: authHeaders,
-      cache: 'no-store'
-    })
-    if (r.status === 404) {
-      await fetch(`${origin}/api/budget/recompute`, {
+    try {
+      // 1) recompute (ignore body, but surface status)
+      const r1 = await fetch(`${origin}/api/budget/recompute`, {
         method: 'POST',
         headers: jsonHeaders,
         body: JSON.stringify({ tenantId, planId, dates: [today] }),
         cache: 'no-store'
       })
-      r = await fetch(`${origin}/api/budget/read?tenantId=${tenantId}&planId=${planId}`, {
+      if (!r1.ok) {
+        const body = await r1.text().catch(()=>'')
+        throw new Error(`POST /api/budget/recompute ${r1.status} ${body}`)
+      }
+
+      // 2) read; if 404, try one more recompute then re-read (race-proof)
+      let r = await fetch(`${origin}/api/budget/read?tenantId=${tenantId}&planId=${planId}`, {
         headers: authHeaders,
         cache: 'no-store'
       })
-    }
-    if (!r.ok) {
-      const body = await r.text().catch(()=>'')
+      if (r.status === 404) {
+        await fetch(`${origin}/api/budget/recompute`, {
+          method: 'POST',
+          headers: jsonHeaders,
+          body: JSON.stringify({ tenantId, planId, dates: [today] }),
+          cache: 'no-store'
+        })
+        r = await fetch(`${origin}/api/budget/read?tenantId=${tenantId}&planId=${planId}`, {
+          headers: authHeaders,
+          cache: 'no-store'
+        })
+      }
+
       if (r.status === 404) {
         return null; // Gracefully handle not found after retry
       }
-      throw new Error(`GET /api/budget/read ${r.status} ${body}`)
+
+      if (!r.ok) {
+        const body = await r.text().catch(()=>'')
+        throw new Error(`GET /api/budget/read ${r.status} ${body}`)
+      }
+      return r.json()
+    } catch (e: any) {
+        console.error('Failed to load budget data:', e);
+        // In case of any error, we return null to be handled gracefully by the UI.
+        return null;
     }
-    return r.json()
   }
 
   // simple RSC pattern
@@ -66,7 +74,7 @@ function BudgetInner() {
       return (
         <div className="p-6">
           <h1 className="text-xl font-semibold mb-4">Budget Not Ready</h1>
-          <p className="text-muted-foreground">The budget for the current period is still being calculated. Please try again in a moment.</p>
+          <p className="text-muted-foreground">The budget for the current period is still being calculated or an error occurred. Please try again in a moment.</p>
         </div>
       )
     }

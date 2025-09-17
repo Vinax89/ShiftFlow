@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/ui/toast'
 
 export function RuleEditor({ initial }: { initial: any[] }){
   const [rules, setRules] = useState(initial)
@@ -10,6 +11,10 @@ export function RuleEditor({ initial }: { initial: any[] }){
   const [testInput, setTestInput] = useState('Starbucks Market #123')
   const [applyDays, setApplyDays] = useState(30)
   const [merchants, setMerchants] = useState<string[]>([])
+  const [dryRun, setDryRun] = useState(true)
+  const [busy, setBusy] = useState<'idle'|'scanning'|'recomputing'|'done'>('idle')
+  const [preview, setPreview] = useState<any[]|null>(null)
+  const { toast } = useToast()
 
   async function refresh(){
     const resp = await fetch(`/api/categorizer/rules?tenantId=dev`, { headers: dev ? { 'x-dev-auth-uid': 'dev-user' } : undefined, cache: 'no-store' })
@@ -54,12 +59,26 @@ export function RuleEditor({ initial }: { initial: any[] }){
   }, [initial, testInput])
 
   async function applyNow(){
+    setBusy('scanning')
     const headers: HeadersInit = { 'content-type': 'application/json' }
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const res = await fetch(`/api/categorizer/apply`, { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', days: applyDays }) })
-    if (!res.ok) { alert(await res.text()); return }
-    const j = await res.json()
-    alert(`Updated ${j.updated} txns; recomputed ${j.recomputed} periods`)
+    const res = await fetch(`/api/categorizer/apply`, { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', days: applyDays, dryRun }) })
+    const body = await (res.ok ? res.json() : res.text())
+    if (!res.ok) {
+      setBusy('idle')
+      toast({ variant: 'destructive', title: 'Apply failed', description: String(body).slice(0,300) })
+      return
+    }
+    if (dryRun) {
+      setPreview(body.preview || [])
+      setBusy('done')
+      toast({ title: 'Dry run complete', description: `Would update ${body.updated} txns across ${body.dates?.length||0} dates` })
+    } else {
+      setBusy('recomputing')
+      setPreview(null)
+      setBusy('done')
+      toast({ title: 'Apply complete', description: `Updated ${body.updated} txns; recomputed ${body.recomputed} periods` })
+    }
   }
 
   return (
@@ -122,9 +141,51 @@ export function RuleEditor({ initial }: { initial: any[] }){
           <div className="flex items-center gap-2">
             <label className="text-sm">Days</label>
             <input type="number" min={1} max={90} value={applyDays} onChange={e=>setApplyDays(Number(e.target.value||30))} className="w-24 border rounded px-2 py-1" />
-            <button onClick={applyNow} className="px-3 py-1 rounded border">Run</button>
+            <label className="text-sm inline-flex items-center gap-2 ml-2">
+              <input type="checkbox" checked={dryRun} onChange={e=>setDryRun(e.target.checked)} /> Dry run
+            </label>
+            <button onClick={applyNow} className="px-3 py-1 rounded border" disabled={busy!=='idle'}>{busy!=='idle'?'Running…':'Run'}</button>
           </div>
           <p className="text-xs text-gray-500 mt-2">Backfills uncategorized txns and recomputes affected periods.</p>
+
+          {/* Progress */}
+          {busy!=='idle' && busy!=='done' && (
+            <div className="mt-3">
+              <div className="h-2 w-full bg-gray-100 rounded overflow-hidden">
+                <div className="h-full w-2/3 animate-pulse bg-gray-300" />
+              </div>
+              <div className="text-xs text-gray-500 mt-1">{busy==='scanning'?'Scanning & matching…':busy==='recomputing'?'Recomputing periods…':'Done'}</div>
+            </div>
+          )}
+
+          {/* Dry run preview */}
+          {dryRun && preview && (
+            <div className="mt-4">
+              <div className="text-sm font-medium mb-1">Dry run result</div>
+              <div className="text-xs text-gray-500 mb-2">Showing up to {preview.length} matches</div>
+              <div className="max-h-48 overflow-auto border rounded">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50"><tr><th className="px-2 py-1 text-left">Date</th><th className="px-2 py-1 text-left">Merchant</th><th className="px-2 py-1 text-right">Amount</th><th className="px-2 py-1">Splits</th></tr></thead>
+                  <tbody>
+                    {preview.map((p)=> (
+                      <tr key={p.txId} className="border-t">
+                        <td className="px-2 py-1 whitespace-nowrap">{p.date}</td>
+                        <td className="px-2 py-1 truncate max-w-[12rem]" title={p.merchant}>{p.merchant}</td>
+                        <td className="px-2 py-1 text-right">{(p.amountCents/100).toFixed(2)}</td>
+                        <td className="px-2 py-1">
+                          {(p.splits||[]).map((s:any)=>`${s.envId}:${(s.amountCents/100).toFixed(2)}`).join(', ')}
+                        </td>
+                      </tr>
+                    ))}
+                    {!preview.length && <tr><td colSpan={4} className="text-center p-4 text-gray-500">No transactions to update.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              {preview.length > 0 && <div className="mt-2">
+                <button onClick={async()=>{ setDryRun(false); await applyNow(); setDryRun(true) }} className="px-3 py-1 rounded border">Apply these now</button>
+              </div>}
+            </div>
+          )}
         </div>
       </div>
     </div>

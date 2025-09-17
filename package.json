@@ -70,7 +70,7 @@
     "@next/eslint-plugin-next": "15.3.3",
     "@playwright/test": "^1.45.1",
     "@types/luxon": "^3.4.2",
-    "@types/node": "^20",
+    "@types/node": "^24",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "genkit-cli": "^1.14.1",

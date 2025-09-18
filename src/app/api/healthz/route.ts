@@ -1,3 +1,3 @@
-export function GET() {
-  return Response.json({ ok: true, ts: new Date().toISOString() });
-}
+import { NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
+export function GET() { return NextResponse.json({ ok: true }); }

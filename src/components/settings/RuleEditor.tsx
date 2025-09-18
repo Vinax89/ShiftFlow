@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { useRecomputeBatch } from '@/hooks/useRecomputeBatch'
 import { DriftButton } from '@/components/settings/DriftButton'
+import { abs } from '@/lib/url'
 
 export function RuleEditor({ initial }: { initial: any[] }){
   const [rules, setRules] = useState(initial)
@@ -33,7 +34,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
 
 
   async function refresh(){
-    const resp = await fetch(`/api/categorizer/rules?tenantId=dev`, { headers: dev ? { 'x-dev-auth-uid': 'dev-user' } : undefined, cache: 'no-store' })
+    const resp = await fetch(abs(`/api/categorizer/rules?tenantId=dev`), { headers: dev ? { 'x-dev-auth-uid': 'dev-user' } : undefined, cache: 'no-store' })
     const data = await resp.json();
     setRules(data.items || [])
   }
@@ -44,11 +45,11 @@ export function RuleEditor({ initial }: { initial: any[] }){
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
     
     ;(async () => {
-      const r = await fetch(`/api/categorizer/merchants?tenantId=dev&days=60`, { headers, cache: 'no-store' })
+      const r = await fetch(abs(`/api/categorizer/merchants?tenantId=dev&days=60`), { headers, cache: 'no-store' })
       if (r.ok) setMerchants((await r.json()).merchants)
     })();
 
-    fetch('/api/accounts?tenantId=dev', { headers })
+    fetch(abs('/api/accounts?tenantId=dev'), { headers })
       .then(r=>r.json()).then(j=> setAccounts(Array.isArray(j.items)? j.items : []))
       .catch(()=> setAccounts([]))
   }, [dev])
@@ -62,7 +63,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
     if (!merchantPattern || !envId){ alert('Invalid rule'); return }
     const headers: HeadersInit = { 'content-type': 'application/json' }
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const res = await fetch(`/api/categorizer/rules?tenantId=dev`, { method: 'POST', headers, body: JSON.stringify({ merchantPattern, envId }) })
+    const res = await fetch(abs(`/api/categorizer/rules?tenantId=dev`), { method: 'POST', headers, body: JSON.stringify({ merchantPattern, envId }) })
     if (!res.ok) { alert(await res.text()); return }
     (e.currentTarget as HTMLFormElement).reset()
     await refresh()
@@ -72,7 +73,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
     if(!confirm(`Are you sure you want to delete rule ${id}?`)) return;
     const headers: HeadersInit = {}
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const res = await fetch(`/api/categorizer/rules?tenantId=dev&id=${encodeURIComponent(id)}`, { method: 'DELETE', headers })
+    const res = await fetch(abs(`/api/categorizer/rules?tenantId=dev&id=${encodeURIComponent(id)}`), { method: 'DELETE', headers })
     if (!res.ok) { alert(await res.text()); return }
     await refresh()
   }
@@ -87,7 +88,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
     setBusy('scanning')
     const headers: HeadersInit = { 'content-type': 'application/json' }
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const res = await fetch(`/api/categorizer/apply`, { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', days: applyDays, dryRun }) })
+    const res = await fetch(abs(`/api/categorizer/apply`), { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', days: applyDays, dryRun }) })
     const body = await (res.ok ? res.json() : res.text())
     if (!res.ok) {
       setBusy('idle')
@@ -146,7 +147,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
     setBusy('recomputing')
     const headers: HeadersInit = { 'content-type': 'application/json' }
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const res = await fetch(`/api/categorizer/apply`, { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', dryRun: false, onlyTxIds: ids, triggerRecompute: true }) })
+    const res = await fetch(abs(`/api/categorizer/apply`), { method: 'POST', headers, body: JSON.stringify({ tenantId: 'dev', dryRun: false, onlyTxIds: ids, triggerRecompute: true }) })
     const body = await (res.ok ? res.json() : res.text())
     setBusy('done')
     if (!res.ok) { toast({ variant: 'destructive', title: 'Apply failed', description: String(body).slice(0,300) }); return }
@@ -162,7 +163,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
     try {
       const headers: HeadersInit = {}
       if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-      const r = await fetch(`/api/budget/envelopes?tenantId=dev`, { headers })
+      const r = await fetch(abs(`/api/budget/envelopes?tenantId=dev`), { headers })
       const j = await r.json().catch(()=>({ envelopes: [] }))
       setEnvOptions(j.envelopes || [])
       setEnvId(j.envelopes?.[0]?.id || 'misc')
@@ -172,7 +173,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
   async function createRule(){
     const headers: HeadersInit = { 'content-type': 'application/json' }
     if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const res = await fetch(`/api/categorizer/rules?tenantId=dev`, { method:'POST', headers, body: JSON.stringify({ tenantId: 'dev', merchantPattern: createMerchant, envId }) })
+    const res = await fetch(abs(`/api/categorizer/rules?tenantId=dev`), { method:'POST', headers, body: JSON.stringify({ tenantId: 'dev', merchantPattern: createMerchant, envId }) })
     const body = await (res.ok ? res.json() : res.text())
     if (!res.ok) { toast({ variant: 'destructive', title:'Create rule failed', description: String(body).slice(0,300) }); return }
     toast({ title:'Rule created', description: `${createMerchant} → ${envId}` })
@@ -369,7 +370,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                             splits: (p.why?.splits||[]).map((x:any)=>({ envId: x.envId, pct: x.pct })),
                                             limit: 100,
                                           }
-                                          const r = await fetch(`/api/categorizer/rules/simulate`, { method:'POST', headers, body: JSON.stringify(body) })
+                                          const r = await fetch(abs(`/api/categorizer/rules/simulate`), { method:'POST', headers, body: JSON.stringify(body) })
                                           const j = await (r.ok ? r.json() : r.text())
                                           if (!r.ok) throw new Error(String(j))
                                           // local annotate: show hit count + swap first few rows’ why/splits amounts to the simulated amounts
@@ -390,7 +391,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                         try {
                                           const headers: HeadersInit = { 'content-type': 'application/json' }
                                           if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-                                          const res = await fetch(`/api/categorizer/rules/${(p.matchReason as any).ruleId}`, {
+                                          const res = await fetch(abs(`/api/categorizer/rules/${(p.matchReason as any).ruleId}`), {
                                             method: 'PATCH', headers,
                                             body: JSON.stringify({
                                               tenantId: 'dev',
@@ -419,7 +420,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                             limit: 500, since: scope.since, until: scope.until, accountId: scope.accountId,
                                             triggerRecompute: false
                                           }
-                                          const r = await fetch(`/api/categorizer/rules/apply`, { method:'POST', headers, body: JSON.stringify(body) })
+                                          const r = await fetch(abs(`/api/categorizer/rules/apply`), { method:'POST', headers, body: JSON.stringify(body) })
                                           const j = await (r.ok ? r.json() : r.text())
                                           if (!r.ok) throw new Error(String(j))
                                           toast({ title: 'Applied', description: `${j.count} transactions updated` })
@@ -440,7 +441,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                         try {
                                           const headers: HeadersInit = { 'content-type': 'application/json' }
                                           if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-                                          const r = await fetch(`/api/categorizer/rules/undo`, { method:'POST', headers, body: JSON.stringify({ tenantId: 'dev' }) })
+                                          const r = await fetch(abs(`/api/categorizer/rules/undo`), { method:'POST', headers, body: JSON.stringify({ tenantId: 'dev' }) })
                                           const j = await (r.ok ? r.json() : r.text())
                                           if (!r.ok) throw new Error(String(j))
                                           toast({ title: 'Undo complete', description: `${j.undone} transactions reverted` })
@@ -488,7 +489,7 @@ export function RuleEditor({ initial }: { initial: any[] }){
                                         try {
                                           const headers: HeadersInit = { 'content-type': 'application/json' }
                                           if (dev) (headers as any)['x-dev-auth-uid'] = 'dev-user'
-                                          const res = await fetch(`/api/categorizer/rules/${p.matchReason.ruleId}`, { method:'PATCH', headers, body: JSON.stringify({ tenantId: 'dev', active: !!val }) })
+                                          const res = await fetch(abs(`/api/categorizer/rules/${p.matchReason.ruleId}`), { method:'PATCH', headers, body: JSON.stringify({ tenantId: 'dev', active: !!val }) })
                                           if (!res.ok) throw new Error(await res.text())
                                           // reflect in local preview state immutably
                                           setPreview(prev => prev!.map(row => row.txId===p.txId ? ({

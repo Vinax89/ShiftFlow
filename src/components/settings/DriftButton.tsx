@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { abs } from '@/lib/url'
 
 export function DriftButton({ ruleId }: { ruleId:string }){
   const [open, setOpen] = useState(false)
@@ -13,7 +14,7 @@ export function DriftButton({ ruleId }: { ruleId:string }){
     setOpen(true)
     const headers: HeadersInit = { 'content-type':'application/json' }
     ;(headers as any)['x-dev-auth-uid'] = 'dev-user'
-    const r = await fetch('/api/categorizer/rules/drift', { method:'POST', headers, body: JSON.stringify({ tenantId:'dev', ruleId, lookbackDays:30 }) })
+    const r = await fetch(abs('/api/categorizer/rules/drift'), { method:'POST', headers, body: JSON.stringify({ tenantId:'dev', ruleId, lookbackDays:30 }) })
     if(!r.ok) {
         const errText = await r.text();
         console.error("Drift report failed:", errText);

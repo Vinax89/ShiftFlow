@@ -1,2 +1,3 @@
-export const dynamic = 'force-static'
-export async function GET() { return new Response('ok', { status: 200 }) }
+export function GET() {
+  return Response.json({ ok: true, ts: new Date().toISOString() });
+}

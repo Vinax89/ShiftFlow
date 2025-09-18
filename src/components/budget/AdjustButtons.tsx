@@ -1,6 +1,7 @@
 "use client"
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { abs } from '@/lib/url';
 
 type Props = { tenantId: string; planId?: string; periodKey: string; envId: string }
 
@@ -12,7 +13,7 @@ export function AdjustButtons({ tenantId, planId, periodKey, envId }: Props){
   async function send(delta: number){
     const headers: HeadersInit = { 'content-type':'application/json' }
     if (dev) headers['x-dev-auth-uid'] = 'dev-user'
-    await fetch('/api/budget/assign', { method: 'POST', headers, body: JSON.stringify({ tenantId, planId: planId || 'baseline', periodKey, envId, deltaCents: delta }) })
+    await fetch(abs('/api/budget/assign'), { method: 'POST', headers, body: JSON.stringify({ tenantId, planId: planId || 'baseline', periodKey, envId, deltaCents: delta }) })
     start(() => {
       r.refresh()
     })

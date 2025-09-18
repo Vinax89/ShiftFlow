@@ -1,6 +1,7 @@
+
 import { Suspense } from 'react'
-import { headers as nextHeaders } from 'next/headers'
 import { AdjustButtons } from '@/components/budget/AdjustButtons'
+import { abs } from '@/lib/url'
 
 function BudgetInner() {
   // dev defaults; replace with user context later
@@ -11,16 +12,12 @@ function BudgetInner() {
 
   // Trigger recompute for today (idempotent) then read
   async function load() {
-    const h = nextHeaders()
-    const proto = h.get('x-forwarded-proto') ?? 'http'
-    const host = h.get('host') ?? 'localhost:9010'
-    const origin = `${proto}://${host}`
     const jsonHeaders: HeadersInit = { 'content-type': 'application/json', ...authHeaders }
     const today = new Date().toISOString().slice(0,10)
 
     try {
       // 1) recompute (ignore body, but surface status)
-      const r1 = await fetch(`${origin}/api/budget/recompute`, {
+      const r1 = await fetch(abs('/api/budget/recompute'), {
         method: 'POST',
         headers: jsonHeaders,
         body: JSON.stringify({ tenantId, planId, dates: [today] }),
@@ -32,18 +29,18 @@ function BudgetInner() {
       }
 
       // 2) read; if 404, try one more recompute then re-read (race-proof)
-      let r = await fetch(`${origin}/api/budget/read?tenantId=${tenantId}&planId=${planId}`, {
+      let r = await fetch(abs(`/api/budget/read?tenantId=${tenantId}&planId=${planId}`), {
         headers: authHeaders,
         cache: 'no-store'
       })
       if (r.status === 404) {
-        await fetch(`${origin}/api/budget/recompute`, {
+        await fetch(abs('/api/budget/recompute'), {
           method: 'POST',
           headers: jsonHeaders,
           body: JSON.stringify({ tenantId, planId, dates: [today] }),
           cache: 'no-store'
         })
-        r = await fetch(`${origin}/api/budget/read?tenantId=${tenantId}&planId=${planId}`, {
+        r = await fetch(abs(`/api/budget/read?tenantId=${tenantId}&planId=${planId}`), {
           headers: authHeaders,
           cache: 'no-store'
         })
@@ -129,7 +126,7 @@ function BudgetRescue(){
       const headers: HeadersInit = { 'content-type': 'application/json' }
       if (typeof window !== 'undefined') (headers as any)['x-dev-auth-uid'] = 'dev-user'
       const today = new Date().toISOString().slice(0,10)
-      const r = await fetch('/api/budget/recompute', { method:'POST', headers, body: JSON.stringify({ tenantId:'dev', dates:[today] }) })
+      const r = await fetch(abs('/api/budget/recompute'), { method:'POST', headers, body: JSON.stringify({ tenantId:'dev', dates:[today] }) })
       if (!r.ok) throw new Error(await r.text())
       location.reload()
     } catch (e:any) {

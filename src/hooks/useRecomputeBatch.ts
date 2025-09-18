@@ -2,6 +2,7 @@
 'use client'
 import { useState } from 'react'
 import { useToast } from '@/components/ui/toast'
+import { abs } from '@/lib/url';
 
 export function useRecomputeBatch(){
   const [progress, setProgress] = useState<{done:number,total:number}|null>(null)
@@ -16,12 +17,12 @@ export function useRecomputeBatch(){
 
     for (let i=0; i<unique.length; i++){
       try {
-        const r = await fetch('/api/budget/recompute', { method:'POST', headers, body: JSON.stringify({ tenantId:'dev', dates:[unique[i]] }) })
+        const r = await fetch(abs('/api/budget/recompute'), { method:'POST', headers, body: JSON.stringify({ tenantId:'dev', dates:[unique[i]] }) })
         if (!r.ok) throw new Error(await r.text())
         
         const newProgress = { done: i+1, total: unique.length }
         setProgress(newProgress)
-        update({ id, title: 'Recomputing budgets...', description: `${newProgress.done} of ${newProgress.total} complete` })
+        update({ id, title: 'Recomputing budgets...', description: `${newProgress.done} of ${new.total} complete` })
 
       } catch (e: any) {
         update({ id, title: 'Recompute failed', description: `Error on date ${unique[i]}: ${e.message}`, variant: 'destructive' })
